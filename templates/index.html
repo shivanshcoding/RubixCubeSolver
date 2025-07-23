@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Rubik’s Cube Solver</title>
+    <meta name="viewport" content="width=400, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Google Fonts (Montserrat) -->
+    <link href="https://fonts.googleapis.com/css?family=Montserrat:700,400" rel="stylesheet">
+    <!-- three.js for 3D preview -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.146.0/build/three.min.js"></script>
+</head>
+
+<body>
+    <h1>Rubik’s Cube Color Input</h1>
+    <div class="colors-row" id="color-row">
+        <!-- Color buttons injected by JS -->
+    </div>
+    <div class="cube-input-section">
+        <div>
+            <div class="cube-2d-net">
+                <div class="face up" id="face-up"></div>
+                <div class="face down" id="face-down"></div>
+                <div class="face left" id="face-left"></div>
+                <div class="face right" id="face-right"></div>
+                <div class="face front" id="face-front"></div>
+                <div class="face back" id="face-back"></div>
+            </div>
+
+            <div style="margin-top: 18px;" class="buttons">
+                <button class="reset-btn" id="reset-btn">Reset</button>
+                <button class="random-btn" id="random-btn">Randomize</button>
+                <button class="submit-btn" id="submit-btn">Submit Cube</button>
+            </div>
+
+            <div id="cube-status" class="status"></div>
+            <div style="color:#00ffe7;font-size:0.95em;margin-top:10px;">
+                <span id="cube-string"></span>
+            </div>
+        </div>
+        <div id="cube-3d-preview"></div>
+    </div>
+    <div id="solution-box" class="solution-box"></div>
+
+    <div id="solver-controls" style="margin-top:20px;">
+        <button id="prev-move-btn" title="Previous Move">⏮️</button>
+        <button id="play-move-btn" title="Play">▶️</button>
+        <button id="pause-move-btn" title="Pause">⏸️</button>
+        <button id="next-move-btn" title="Next Move">⏭️</button>
+        <span id="move-indicator" style="margin-left:10px;"></span>
+    </div>
+    <div style="margin-top:8px;">
+        <img id="move-image" style="height:64px;vertical-align:middle;">
+    </div>
+    <script src="{{ url_for('static', filename='js/solver_anim.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/cube_input.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/cube_3d.js') }}"></script>
+</body>
+
+</html>
