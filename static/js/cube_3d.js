@@ -1,5 +1,6 @@
 let scene, camera, renderer, cubelets = [];
 
+// Initialize 3D scene, camera, renderer, and create cubelets
 function init3D() {
     const w = 320, h = 320;
     scene = new THREE.Scene();
@@ -13,13 +14,13 @@ function init3D() {
     camera.position.set(5, 6, 7);
     camera.lookAt(scene.position);
 
-    // Lighting
+    // Lighting setup
     scene.add(new THREE.AmbientLight(0xffffff, 0.8));
     const dir = new THREE.DirectionalLight(0xffffff, 0.4);
     dir.position.set(8, 12, 10);
     scene.add(dir);
 
-    // Build cubelets
+    // Create cubelets with 27 small cubes and add to scene
     cubelets = [];
     let sz = 0.95, gap = 0.06;
     for (let x = -1; x <= 1; x++)
@@ -38,9 +39,9 @@ function init3D() {
     update3DCube();
 }
 
+// Update cubelet colors based on current cubeState
 function update3DCube() {
     if (!scene || !cubelets || !COLORS || !cubeState) return;
-    // Defensive
     for (let face = 0; face < 6; face++) {
         if (!cubeState[face]) return;
         for (let row = 0; row < 3; row++) {
@@ -53,63 +54,66 @@ function update3DCube() {
 
     for (let c of cubelets) {
         let { mesh, x, y, z } = c;
+        // Set default dark gray color for all 6 faces of the cubelet
         for (let i = 0; i < 6; i++)
             mesh.material[i].color.set(0x232323);
 
-        // Up (+Y)    (material 2)
+        // Assign colors to visible faces accordingly:
+
+        // Up face (+Y), material index 2
         if (y === 1)
             mesh.material[2].color.set(COLORS[cubeState[0][z + 1][x + 1]].hex);
 
-        // Down (-Y)  (material 3)
+        // Down face (-Y), material index 3
         if (y === -1)
-            mesh.material[3].color.set(COLORS[cubeState[3][x + 1][z + 1]].hex);
+            mesh.material[3].color.set(COLORS[cubeState[3][2 - (z + 1)][2 - (x + 1)]].hex);
 
-        // Right (+X) (material 0)
+        // Right face (+X), material index 0
         if (x === 1)
             mesh.material[0].color.set(COLORS[cubeState[1][2 - (y + 1)][2 - (z + 1)]].hex);
 
-        //Left (-X) (material 1)
+        // Left face (-X), material index 1
         if (x === -1)
             mesh.material[1].color.set(COLORS[cubeState[4][2 - (y + 1)][z + 1]].hex);
 
-        // Front (+Z) (material 4)
+        // Front face (+Z), material index 4
         if (z === 1)
             mesh.material[4].color.set(COLORS[cubeState[2][2 - (y + 1)][x + 1]].hex);
 
-        // Back (-Z) (material 5)
+        // Back face (-Z), material index 5
         if (z === -1)
             mesh.material[5].color.set(COLORS[cubeState[5][2 - (y + 1)][2 - (x + 1)]].hex);
-
     }
 }
 
+// Animation loop
 function animate() {
     requestAnimationFrame(animate);
+    // Optionally rotate entire cube slowly for preview
     scene.rotation.y += 0.009;
     renderer.render(scene, camera);
 }
 
 document.addEventListener('DOMContentLoaded', init3D);
 
-// Helper: Get all cubelets that are part of a face
+// Helper to get cubelets belonging to a given face (U,D,F,B,L,R)
 function getFaceCubelets(face) {
-    // face: 'U', 'D', 'F', 'B', 'L', 'R'
-    // Returns array of {idx, mesh}
     let res = [];
     for (let idx = 0; idx < cubelets.length; idx++) {
         let cubelet = cubelets[idx];
         let pos = cubelet.mesh.position;
-        if (face === 'U' && Math.abs(pos.y - 2 * 0.505) < 0.1) res.push({ idx, mesh: cubelet.mesh });
-        if (face === 'D' && Math.abs(pos.y + 2 * 0.505) < 0.1) res.push({ idx, mesh: cubelet.mesh });
-        if (face === 'F' && Math.abs(pos.z - 2 * 0.505) < 0.1) res.push({ idx, mesh: cubelet.mesh });
-        if (face === 'B' && Math.abs(pos.z + 2 * 0.505) < 0.1) res.push({ idx, mesh: cubelet.mesh });
-        if (face === 'L' && Math.abs(pos.x + 2 * 0.505) < 0.1) res.push({ idx, mesh: cubelet.mesh });
-        if (face === 'R' && Math.abs(pos.x - 2 * 0.505) < 0.1) res.push({ idx, mesh: cubelet.mesh });
+        // Positions are multiples of ~1.01; use 2 * 0.505 = 1.01 to identify slice
+        if (face === 'U' && Math.abs(pos.y - 1.01) < 0.1) res.push({ idx, mesh: cubelet.mesh });
+        else if (face === 'D' && Math.abs(pos.y + 1.01) < 0.1) res.push({ idx, mesh: cubelet.mesh });
+        else if (face === 'F' && Math.abs(pos.z - 1.01) < 0.1) res.push({ idx, mesh: cubelet.mesh });
+        else if (face === 'B' && Math.abs(pos.z + 1.01) < 0.1) res.push({ idx, mesh: cubelet.mesh });
+        else if (face === 'L' && Math.abs(pos.x + 1.01) < 0.1) res.push({ idx, mesh: cubelet.mesh });
+        else if (face === 'R' && Math.abs(pos.x - 1.01) < 0.1) res.push({ idx, mesh: cubelet.mesh });
     }
     return res;
 }
 
-// Animate rotating a face (with logic+stickers update)
+// Animate rotating a face with given direction and times (90° increments)
 function animateFaceRotation(face, direction, times, callback) {
     function oneTurn(turnNum) {
         const facelets = getFaceCubelets(face);
@@ -150,30 +154,38 @@ function animateFaceRotation(face, direction, times, callback) {
     oneTurn(0);
 }
 
-// High-level move application
-function applyMoveTo3DCube(move, callback) {
-    // Parse move: e.g. R, R', R2
-    let face = move[0];
+// Parse a move string and returns object with face, direction, and times
+function parseMove(move) {
+    const face = move[0];
     let direction = 1;
     let times = 1;
     if (move.length > 1) {
         if (move[1] === "'") direction = -1;
-        if (move[1] === "2") times = 2;
+        else if (move[1] === "2") times = 2;
     }
-    animateFaceRotation(face, direction, times, callback);
+    return { face, direction, times };
 }
-function reverseMoveTo3DCube(move, callback) {
-    let face = move[0];
-    let direction = -1;
-    let times = 1;
-    if (move.length > 1) {
-        if (move[1] === "'") direction = 1;
-        if (move[1] === "2") times = 2;
-    }
+
+// Get inverse of a move (for reverse animation)
+function invertMove(move) {
+    const { face, direction, times } = parseMove(move);
+    const invDirection = (times === 2) ? direction : -direction; // double turns are self-inverse
+    return { face, direction: invDirection, times };
+}
+
+// Apply a move animation
+function applyMoveTo3DCube(move, callback) {
+    const { face, direction, times } = parseMove(move);
     animateFaceRotation(face, direction, times, callback);
 }
 
-// Update logical cubelet coords after a face turn (robust, no direction mutation bug)
+// Apply reverse move animation
+function reverseMoveTo3DCube(move, callback) {
+    const { face, direction, times } = invertMove(move);
+    animateFaceRotation(face, direction, times, callback);
+}
+
+// Update cubelets logical coordinates after a single face turn
 function rotateFaceCoords(face, direction) {
     for (let c of cubelets) {
         let { x, y, z } = c;
@@ -206,78 +218,73 @@ function rotateFaceCoords(face, direction) {
     }
 }
 
-// Rotate stickers in cubeState for a face turn (with robust mapping)
+// Rotate face and adjacent edge stickers in cubeState after face turn
 function rotateFaceInCubeState(face, direction) {
-    // face: 'U','D','F','B','L','R'
-    // direction: 1 (CW), -1 (CCW)
-    // Rotates the face and the adjacent edge stickers in cubeState
-
     function rotateFaceMatrix(fidx, dir) {
         let faceArr = cubeState[fidx];
         let temp = faceArr.map(row => row.slice());
         if (dir === 1) {
-            // CW
+            // Clockwise
             for (let i = 0; i < 3; i++)
                 for (let j = 0; j < 3; j++)
                     faceArr[j][2 - i] = temp[i][j];
         } else {
-            // CCW
+            // Counter-clockwise
             for (let i = 0; i < 3; i++)
                 for (let j = 0; j < 3; j++)
                     faceArr[2 - j][i] = temp[i][j];
         }
     }
 
-    // Face indices in your cubeState: U=0, R=1, F=2, D=3, L=4, B=5
     const FACES = { U: 0, R: 1, F: 2, D: 3, L: 4, B: 5 };
 
-    // For each face, 4 arrays of 3 [row,col] pairs (for the 4 adjacent faces), in rotation order
     const adjacent = {
         U: [
-            [ [5,0,2], [5,0,1], [5,0,0] ], // B top
-            [ [1,0,2], [1,0,1], [1,0,0] ], // R top
-            [ [2,0,2], [2,0,1], [2,0,0] ], // F top
-            [ [4,0,2], [4,0,1], [4,0,0] ], // L top
+            [[5, 0, 2], [5, 0, 1], [5, 0, 0]], // B top
+            [[1, 0, 2], [1, 0, 1], [1, 0, 0]], // R top
+            [[2, 0, 2], [2, 0, 1], [2, 0, 0]], // F top
+            [[4, 0, 2], [4, 0, 1], [4, 0, 0]], // L top
         ],
         D: [
-            [ [2,2,2], [2,2,1], [2,2,0] ], // F bottom
-            [ [1,2,2], [1,2,1], [1,2,0] ], // R bottom
-            [ [5,2,2], [5,2,1], [5,2,0] ], // B bottom
-            [ [4,2,2], [4,2,1], [4,2,0] ], // L bottom
+            [[2, 2, 2], [2, 2, 1], [2, 2, 0]], // F bottom
+            [[1, 2, 2], [1, 2, 1], [1, 2, 0]], // R bottom
+            [[5, 2, 2], [5, 2, 1], [5, 2, 0]], // B bottom
+            [[4, 2, 2], [4, 2, 1], [4, 2, 0]], // L bottom
         ],
         F: [
-            [ [0,2,0], [0,2,1], [0,2,2] ], // U bottom
-            [ [1,0,0], [1,1,0], [1,2,0] ], // R left col
-            [ [3,0,2], [3,0,1], [3,0,0] ], // D top (reversed)
-            [ [4,2,2], [4,1,2], [4,0,2] ], // L right col (reversed)
+            [[0, 2, 0], [0, 2, 1], [0, 2, 2]], // U bottom
+            [[1, 0, 0], [1, 1, 0], [1, 2, 0]], // R left column
+            [[3, 0, 2], [3, 0, 1], [3, 0, 0]], // D top (reversed)
+            [[4, 2, 2], [4, 1, 2], [4, 0, 2]], // L right column (reversed)
         ],
         B: [
-            [ [0,0,2], [0,0,1], [0,0,0] ], // U top
-            [ [4,2,0], [4,1,0], [4,0,0] ], // L left col
-            [ [3,2,0], [3,2,1], [3,2,2] ], // D bottom (reversed)
-            [ [1,0,2], [1,1,2], [1,2,2] ], // R right col (reversed)
+            [[0, 0, 2], [0, 0, 1], [0, 0, 0]], // U top
+            [[4, 2, 0], [4, 1, 0], [4, 0, 0]], // L left column
+            [[3, 2, 0], [3, 2, 1], [3, 2, 2]], // D bottom (reversed)
+            [[1, 0, 2], [1, 1, 2], [1, 2, 2]], // R right column (reversed)
         ],
         R: [
-            [ [0,0,2], [0,1,2], [0,2,2] ], // U right col
-            [ [5,2,0], [5,1,0], [5,0,0] ], // B left col (reversed)
-            [ [3,0,2], [3,1,2], [3,2,2] ], // D right col
-            [ [2,0,2], [2,1,2], [2,2,2] ], // F right col
+            [[0, 0, 2], [0, 1, 2], [0, 2, 2]], // U right column
+            [[5, 2, 0], [5, 1, 0], [5, 0, 0]], // B left column (reversed)
+            [[3, 0, 2], [3, 1, 2], [3, 2, 2]], // D right column
+            [[2, 0, 2], [2, 1, 2], [2, 2, 2]], // F right column
         ],
         L: [
-            [ [0,2,0], [0,1,0], [0,0,0] ], // U left col
-            [ [2,0,0], [2,1,0], [2,2,0] ], // F left col
-            [ [3,2,0], [3,1,0], [3,0,0] ], // D left col (reversed)
-            [ [5,0,2], [5,1,2], [5,2,2] ], // B right col (reversed)
+            [[0, 2, 0], [0, 1, 0], [0, 0, 0]], // U left column
+            [[2, 0, 0], [2, 1, 0], [2, 2, 0]], // F left column
+            [[3, 2, 0], [3, 1, 0], [3, 0, 0]], // D left column (reversed)
+            [[5, 0, 2], [5, 1, 2], [5, 2, 2]], // B right column (reversed)
         ],
     };
 
     rotateFaceMatrix(FACES[face], direction);
 
-    let adj = adjacent[face];
-    let temp = adj.map(arr => arr.map(([f, r, c]) => cubeState[f][r][c]));
-    let mapTo = direction === 1 ? [3,0,1,2] : [1,2,3,0];
+    const adj = adjacent[face];
+    const temp = adj.map(arr => arr.map(([f, r, c]) => cubeState[f][r][c]));
+    const mapTo = direction === 1 ? [3, 0, 1, 2] : [1, 2, 3, 0];
+
     for (let i = 0; i < 4; i++) {
-        let from = temp[mapTo[i]];
+        const from = temp[mapTo[i]];
         for (let j = 0; j < 3; j++) {
             let [f, r, c] = adj[i][j];
             cubeState[f][r][c] = from[j];
