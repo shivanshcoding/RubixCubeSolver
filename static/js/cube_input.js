@@ -1,4 +1,3 @@
-// Colors (can customize)
 const COLORS = [
     { name: 'white', hex: '#fff', k: 'U' },    // Up
     { name: 'red', hex: '#ff2222', k: 'R' },   // Right
@@ -10,15 +9,12 @@ const COLORS = [
 let selectedColor = 0;
 
 
-// 0-based [face][row][col]
 let cubeState = Array(6).fill().map(() => Array(3).fill().map(() => Array(3).fill(0)));
 
 
-// Face order: U, R, F, D, L, B
 const FACE_ORDER = ['up', 'right', 'front', 'down', 'left', 'back'];
 const FACE_MAP = { up: 0, right: 1, front: 2, down: 3, left: 4, back: 5 };
 
-// Fixed mapping from color index to Kociemba face letter
 const COLOR_IDX_TO_FACE_LETTER = {
     0: 'U', // white
     1: 'R', // red
@@ -66,7 +62,6 @@ function drawCube() {
     });
 }
 
-// Returns cube string for Kociemba solver using fixed known color to face letter mapping
 function getKociembaCubeString() {
     let str = "";
     for (let face = 0; face < 6; face++) {
@@ -87,7 +82,6 @@ function updateCubeString() {
     validateCube();
 }
 
-// Check that centers match expected fixed color indexes for each face
 function validateCenters() {
     for (let f = 0; f < 6; f++) {
         if (cubeState[f][1][1] !== f) return false;
@@ -203,96 +197,3 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('reset-btn').onclick = resetCube;
     document.getElementById('random-btn').onclick = randomizeCube;
 });
-
-
-// Rotates a face and adjacent stickers in cubeState
-function rotateFaceInCubeState(face, direction) {
-    // face: 'U','D','F','B','L','R'
-    // direction: 1 (CW), -1 (CCW)
-    // Rotates the face and the adjacent edge stickers in cubeState
-
-    // Helper to rotate a 3x3 matrix in place
-    function rotateFaceMatrix(fidx, dir) {
-        let faceArr = cubeState[fidx];
-        // Deep copy to avoid overwrite
-        let temp = faceArr.map(row => row.slice());
-        if (dir === 1) {
-            // CW
-            for (let i = 0; i < 3; i++)
-                for (let j = 0; j < 3; j++)
-                    faceArr[j][2 - i] = temp[i][j];
-        } else {
-            // CCW
-            for (let i = 0; i < 3; i++)
-                for (let j = 0; j < 3; j++)
-                    faceArr[2 - j][i] = temp[i][j];
-        }
-    }
-
-    // Face indices in your cubeState: U=0, R=1, F=2, D=3, L=4, B=5
-    // For each move, permute the adjacent edge stickers
-    // See https://ruwix.com/the-rubiks-cube/notation/ for the mapping
-    // We'll define the mapping for each face
-    // Each entry: [faceIdx, row, col], in the order to be rotated
-
-    // Map: face letter to index
-    const FACES = { U: 0, R: 1, F: 2, D: 3, L: 4, B: 5 };
-
-    // For each face, 4 arrays of 3 [row,col] pairs (for the 4 adjacent faces), in rotation order
-    // Format: [ [faceIdx, row1, col1], ... x3 ] x4 adjacent faces
-    const adjacent = {
-        U: [
-            [ [5,0,2], [5,0,1], [5,0,0] ], // B top
-            [ [1,0,2], [1,0,1], [1,0,0] ], // R top
-            [ [2,0,2], [2,0,1], [2,0,0] ], // F top
-            [ [4,0,2], [4,0,1], [4,0,0] ], // L top
-        ],
-        D: [
-            [ [2,2,2], [2,2,1], [2,2,0] ], // F bottom
-            [ [1,2,2], [1,2,1], [1,2,0] ], // R bottom
-            [ [5,2,2], [5,2,1], [5,2,0] ], // B bottom
-            [ [4,2,2], [4,2,1], [4,2,0] ], // L bottom
-        ],
-        F: [
-            [ [0,2,0], [0,2,1], [0,2,2] ], // U bottom
-            [ [1,0,0], [1,1,0], [1,2,0] ], // R left col
-            [ [3,0,2], [3,0,1], [3,0,0] ], // D top (reversed)
-            [ [4,2,2], [4,1,2], [4,0,2] ], // L right col (reversed)
-        ],
-        B: [
-            [ [0,0,2], [0,0,1], [0,0,0] ], // U top
-            [ [4,2,0], [4,1,0], [4,0,0] ], // L left col
-            [ [3,2,0], [3,2,1], [3,2,2] ], // D bottom (reversed)
-            [ [1,0,2], [1,1,2], [1,2,2] ], // R right col (reversed)
-        ],
-        R: [
-            [ [0,0,2], [0,1,2], [0,2,2] ], // U right col
-            [ [5,2,0], [5,1,0], [5,0,0] ], // B left col (reversed)
-            [ [3,0,2], [3,1,2], [3,2,2] ], // D right col
-            [ [2,0,2], [2,1,2], [2,2,2] ], // F right col
-        ],
-        L: [
-            [ [0,2,0], [0,1,0], [0,0,0] ], // U left col
-            [ [2,0,0], [2,1,0], [2,2,0] ], // F left col
-            [ [3,2,0], [3,1,0], [3,0,0] ], // D left col (reversed)
-            [ [5,0,2], [5,1,2], [5,2,2] ], // B right col (reversed)
-        ],
-    };
-
-    // Rotate face stickers
-    rotateFaceMatrix(FACES[face], direction);
-
-    // Rotate adjacent edge stickers
-    let adj = adjacent[face];
-    // Deep copy edge stickers in rotation order
-    let temp = adj.map(arr => arr.map(([f, r, c]) => cubeState[f][r][c]));
-    // For CW: i -> (i+1)%4; For CCW: i -> (i+3)%4
-    let mapTo = direction === 1 ? [3,0,1,2] : [1,2,3,0];
-    for (let i = 0; i < 4; i++) {
-        let from = temp[mapTo[i]];
-        for (let j = 0; j < 3; j++) {
-            let [f, r, c] = adj[i][j];
-            cubeState[f][r][c] = from[j];
-        }
-    }
-}
