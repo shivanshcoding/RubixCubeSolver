@@ -106,19 +106,77 @@ function getFaceCubelets(face) {
 //     }
 // }
 
+function rotateCubeletMaterials(face, direction, cubelet) {
+    const mat = cubelet.mesh.material;
+    let rotated;
+
+    switch (face) {
+        case 'U':
+            rotated = direction === 1
+                ? [mat[1], mat[4], mat[0], mat[5]]  // L, F, R, B → CW
+                : [mat[1], mat[4], mat[0], mat[5]]; // CCW
+            [mat[1], mat[4], mat[0], mat[5]] = rotated;
+            break;
+
+        case 'D':
+            rotated = direction === 1
+                ? [mat[0], mat[5], mat[1], mat[4]]  // R, B, L, F → CW
+                : [mat[0], mat[5], mat[1], mat[4]]; // CCW
+            [mat[0], mat[5], mat[1], mat[4]] = rotated;
+            break;
+
+        case 'F':
+            rotated = direction === 1
+                ? [mat[1], mat[2], mat[0], mat[3]]  // L, U, R, D → CW
+                : [mat[1], mat[2], mat[0], mat[3]]; // CCW
+            [mat[1], mat[2], mat[0], mat[3]] = rotated;
+            break;
+
+        case 'B':
+            rotated = direction === 1
+                ? [mat[0], mat[3], mat[1], mat[2]]  // R, D, L, U → CW
+                : [mat[0], mat[3], mat[1], mat[2]]; // CCW
+            [mat[0], mat[3], mat[1], mat[2]] = rotated;
+            break;
+
+        case 'R':
+            rotated = direction == 1
+                ? [mat[2], mat[4], mat[3], mat[5]]  // U, F, D, B → CW
+                : [mat[2], mat[4], mat[3], mat[5]]; // CCW
+            [mat[2], mat[4], mat[3], mat[5]] = rotated;
+            break;
+
+        case 'L':
+            rotated = direction == 1
+                ? [mat[2], mat[5], mat[3], mat[4]]  // U, B, D, F → CW
+                : [mat[2], mat[5], mat[3], mat[4]]; // CCW
+            [mat[2], mat[5], mat[3], mat[4]] = rotated;
+            break;
+    }
+}
+
 
 function animateFaceRotation(face, direction, times, callback) {
     function oneTurn(turnNum) {
         const facelets = getFaceCubelets(face);
+
         const axisMap = {
-            U: [0, 1, 0], D: [0, -1, 0],
-            F: [0, 0, 1], B: [0, 0, -1],
-            L: [-1, 0, 0], R: [1, 0, 0],
+            U: [0, 1, 0],
+            D: [0, -1, 0],
+            F: [0, 0, 1],
+            B: [0, 0, -1],
+            L: [-1, 0, 0],
+            R: [1, 0, 0],
         };
+
         const axisVec = new THREE.Vector3(...axisMap[face]);
-        const invertDir = ['D', 'B', 'R','L'];
-        const realDir = invertDir.includes(face) ? -direction : direction;
-        const angle = (Math.PI / 2) * realDir;
+
+        // ✅ Flip for these faces so visual CW matches standard notation
+        const flipFaces = ['L', 'D', 'B', 'R','F', 'U'];
+        const visualDirection = flipFaces.includes(face) ? -direction : direction;
+
+        const angle = (Math.PI / 2) * visualDirection;
+
         const totalFrames = 20;
         let frame = 0;
 
@@ -152,6 +210,7 @@ function animateFaceRotation(face, direction, times, callback) {
 
     oneTurn(0);
 }
+
 
 function rotateFaceCoords(face, direction) {
     for (let c of cubelets) {
@@ -221,7 +280,7 @@ function parseMove(move) {
 
 function invertMove(move) {
     const { face, direction, times } = parseMove(move);
-    const invDirection = (times === 2) ? direction : -direction;
+    const invDirection = -direction;
     return { face, direction: invDirection, times };
 }
 
