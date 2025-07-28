@@ -10,7 +10,6 @@
 <body>
     <div class="solution-header">
         <h1>Rubik’s Cube Solution</h1>
-        <div class="solution-cube-string" id="solution-cube-string"></div>
     </div>
     <div class="solution-advanced-section">
         <div id="cube-3d-solution" class="cube-3d-solution" aria-label="3D Cube Preview"></div>
@@ -28,12 +27,12 @@
             <button id="prev-move-btn" class="move-btn" aria-label="Previous Move">&#9194;&#65039; Prev</button>
             <button id="next-move-btn" class="move-btn" aria-label="Next Move">Next &#9193;&#65039;</button>
         </div>
-        <div class="move-image-section">
+        <!-- <div class="move-image-section">
             <img id="move-image" style="height:64px;vertical-align:middle;" alt="Move diagram">
-        </div>
+        </div> -->
     </div>
     <script src="https://cdn.jsdelivr.net/npm/three@0.146.0/build/three.min.js"></script>
     <script src="/static/js/solver_anim.js"></script>
-    <script src="/static/js/solution_viewer.js"></script>
+    <script type="module" src="/static/js/solution_viewer.js"></script>
 </body>
 </html>

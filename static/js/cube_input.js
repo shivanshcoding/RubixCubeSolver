@@ -60,11 +60,13 @@ COLORS = getColorDefs();
 
 function drawColorBtns() {
     const row = document.getElementById('color-row');
+    if (!row) return;
     row.innerHTML = '';
     COLORS.forEach((c, i) => {
         let btn = document.createElement('div');
         btn.className = 'color-btn' + (i === selectedColor ? ' selected' : '');
         btn.style.background = c.hex;
+        btn.tabIndex = 0;
         btn.onclick = () => {
             selectedColor = i;
             document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('selected'));
@@ -77,20 +79,28 @@ function drawColorBtns() {
 function drawCube() {
     FACE_ORDER.forEach(face => {
         let grid = document.getElementById(`face-${face}`);
+        if (!grid) return;
         grid.innerHTML = '';
         let f = FACE_MAP[face];
         for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
             let cell = document.createElement('div');
             cell.className = 'cube-cell';
             cell.style.background = COLORS[cubeState[f][r][c]].hex;
-            cell.onclick = () => {
-                cubeState[f][r][c] = selectedColor;
-                cell.style.background = COLORS[selectedColor].hex;
-                cell.classList.add('selected');
-                setTimeout(() => cell.classList.remove('selected'), 250);
-                update3DCube();
-                updateCubeString();
-            };
+            // Make center stickers fixed and visually distinct
+            if (r === 1 && c === 1) {
+                cell.style.border = '2px solid var(--text-accent)';
+                cell.style.boxShadow = '0 0 8px var(--text-accent-2)';
+                cell.style.cursor = 'not-allowed';
+            } else {
+                cell.onclick = () => {
+                    cubeState[f][r][c] = selectedColor;
+                    cell.style.background = COLORS[selectedColor].hex;
+                    cell.classList.add('selected');
+                    setTimeout(() => cell.classList.remove('selected'), 250);
+                    update3DCube();
+                    updateCubeString();
+                };
+            }
             grid.appendChild(cell);
         }
     });
@@ -112,7 +122,8 @@ function getKociembaCubeString() {
 
 function updateCubeString() {
     const cubeStr = getKociembaCubeString();
-    document.getElementById('cube-string').textContent = cubeStr;
+    const el = document.getElementById('cube-string');
+    if (el) el.textContent = cubeStr;
     validateCube();
 }
 
@@ -125,29 +136,36 @@ function validateCenters() {
 
 function validateCube() {
     if (!validateCenters()) {
-        document.getElementById('cube-status').textContent = '✗ Invalid: Each face center must be the correct fixed color.';
-        document.getElementById('cube-status').className = 'status invalid';
-        document.getElementById('submit-btn').disabled = true;
+        const status = document.getElementById('cube-status');
+        if (status) {
+            status.textContent = '✗ Invalid: Each face center must be the correct fixed color.';
+            status.className = 'status invalid';
+        }
+        const submitBtn = document.getElementById('submit-btn');
+        if (submitBtn) submitBtn.disabled = true;
         return;
     }
-
     let colorCounts = Array(6).fill(0);
     for (let f = 0; f < 6; f++)
         for (let r = 0; r < 3; r++)
             for (let c = 0; c < 3; c++)
                 colorCounts[cubeState[f][r][c]]++;
-
     let valid = colorCounts.every(count => count === 9);
-
     const status = document.getElementById('cube-status');
     if (valid) {
-        status.textContent = '✔ Cube state valid!';
-        status.className = 'status valid';
-        document.getElementById('submit-btn').disabled = false;
+        if (status) {
+            status.textContent = '✔ Cube state valid!';
+            status.className = 'status valid';
+        }
+        const submitBtn = document.getElementById('submit-btn');
+        if (submitBtn) submitBtn.disabled = false;
     } else {
-        status.textContent = '✗ Invalid: Each color must appear 9 times.';
-        status.className = 'status invalid';
-        document.getElementById('submit-btn').disabled = true;
+        if (status) {
+            status.textContent = '✗ Invalid: Each color must appear 9 times.';
+            status.className = 'status invalid';
+        }
+        const submitBtn = document.getElementById('submit-btn');
+        if (submitBtn) submitBtn.disabled = true;
     }
 }
 
@@ -188,9 +206,13 @@ function resetCube() {
 // Remove randomize button logic and cube string display
 
 document.addEventListener('DOMContentLoaded', () => {
-    drawColorBtns();
-    resetCube(); // Reset initializes the cube with centers fixed and uniform colors
-    document.getElementById('submit-btn').onclick = submitCube;
-    document.getElementById('reset-btn').onclick = resetCube;
-    // No randomize button
+    // Only draw color buttons and grid if manual-cube-section is visible
+    if (document.getElementById('manual-cube-section') && document.getElementById('manual-cube-section').style.display !== 'none') {
+        drawColorBtns();
+        resetCube();
+    }
+    const submitBtn = document.getElementById('submit-btn');
+    if (submitBtn) submitBtn.onclick = submitCube;
+    const resetBtn = document.getElementById('reset-btn');
+    if (resetBtn) resetBtn.onclick = resetCube;
 });
