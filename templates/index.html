@@ -1,61 +1,77 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <title>Rubik’s Cube Solver</title>
-    <meta name="viewport" content="width=400, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <!-- Google Fonts (Montserrat) -->
     <link href="https://fonts.googleapis.com/css?family=Montserrat:700,400" rel="stylesheet">
-    <!-- three.js for 3D preview -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.146.0/build/three.min.js"></script>
 </head>
-
 <body>
-    <h1>Rubik’s Cube Color Input</h1>
-    <div class="colors-row" id="color-row">
-        <!-- Color buttons injected by JS -->
-    </div>
-    <div class="cube-input-section">
-        <div>
-            <div class="cube-2d-net">
-                <div class="face up" id="face-up"></div>
-                <div class="face down" id="face-down"></div>
-                <div class="face left" id="face-left"></div>
-                <div class="face right" id="face-right"></div>
-                <div class="face front" id="face-front"></div>
-                <div class="face back" id="face-back"></div>
+    <div class="background-animated"></div>
+    <header class="main-header">
+        <div class="header-row">
+            <div class="logo" id="site-logo">
+                <!-- Simple Rubik's Cube SVG logo -->
+                <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="2" y="2" width="44" height="44" rx="8" fill="#fff"/>
+                  <rect x="2" y="2" width="44" height="44" rx="8" stroke="#1e3c72" stroke-width="4"/>
+                  <rect x="6" y="6" width="12" height="12" rx="2" fill="#ff3d00"/>
+                  <rect x="18" y="6" width="12" height="12" rx="2" fill="#ffd600"/>
+                  <rect x="30" y="6" width="12" height="12" rx="2" fill="#00c853"/>
+                  <rect x="6" y="18" width="12" height="12" rx="2" fill="#2962ff"/>
+                  <rect x="18" y="18" width="12" height="12" rx="2" fill="#fff"/>
+                  <rect x="30" y="18" width="12" height="12" rx="2" fill="#ffeb3b"/>
+                  <rect x="6" y="30" width="12" height="12" rx="2" fill="#ff6d00"/>
+                  <rect x="18" y="30" width="12" height="12" rx="2" fill="#d500f9"/>
+                  <rect x="30" y="30" width="12" height="12" rx="2" fill="#00bcd4"/>
+                </svg>
             </div>
-
-            <div style="margin-top: 18px;" class="buttons">
-                <button class="reset-btn" id="reset-btn">Reset</button>
-                <button class="random-btn" id="random-btn">Randomize</button>
-                <button class="submit-btn" id="submit-btn">Submit Cube</button>
-            </div>
-
-            <div id="cube-status" class="status"></div>
-            <div style="color:#00ffe7;font-size:0.95em;margin-top:10px;">
-                <span id="cube-string"></span>
-            </div>
+            <button class="theme-toggle" id="theme-toggle" aria-label="Toggle dark/light mode">
+                <span class="theme-icon" id="theme-icon">🌙</span>
+            </button>
         </div>
-        <div id="cube-3d-preview"></div>
-    </div>
-    <div id="solution-box" class="solution-box"></div>
-
-    <div id="solver-controls" style="margin-top:20px;">
-        <button id="prev-move-btn" title="Previous Move">⏮️</button>
-        <button id="play-move-btn" title="Play">▶️</button>
-        <button id="pause-move-btn" title="Pause">⏸️</button>
-        <button id="next-move-btn" title="Next Move">⏭️</button>
-        <span id="move-indicator" style="margin-left:10px;"></span>
-    </div>
-    <div style="margin-top:8px;">
-        <img id="move-image" style="height:64px;vertical-align:middle;">
-    </div>
+        <h1>Rubik’s Cube Solver</h1>
+        <p class="subtitle">Solve your cube with AI, manual input, or online scrambles!</p>
+    </header>
+    <section class="video-hero">
+        <video id="hero-video" autoplay loop muted playsinline poster="https://images.pexels.com/photos/163077/cube-puzzle-colorful-play-163077.jpeg?auto=compress&w=600">
+            <source src="https://videos.pexels.com/video-files/856192/856192-hd_1920_1080_25fps.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+        <div class="video-overlay"></div>
+        <div class="video-hero-text">
+            <h2>Experience the Magic of Solving</h2>
+            <p>Watch, interact, and solve in real time!</p>
+        </div>
+    </section>
+    <main class="card-container">
+        <a class="nav-card" href="/manual">
+            <div class="card-icon">📝</div>
+            <div class="card-title">Manual Input</div>
+            <div class="card-desc">Enter your cube state manually and get a step-by-step solution.</div>
+        </a>
+        <a class="nav-card" href="/ai">
+            <div class="card-icon">🤖</div>
+            <div class="card-title">AI Input</div>
+            <div class="card-desc">Let our AI analyze and solve your cube automatically.</div>
+        </a>
+        <a class="nav-card" href="/online">
+            <div class="card-icon">🌐</div>
+            <div class="card-title">Online Cube Problem</div>
+            <div class="card-desc">Try out trending online cube scrambles and see solutions instantly.</div>
+        </a>
+    </main>
+    <section class="about-section">
+        <h2>About This Project</h2>
+        <p>
+            This is where I'll share how I built this Rubik's Cube Solver, the technologies I used, and what I learned along the way. (You can edit this text to add your story!)
+        </p>
+    </section>
     <script src="{{ url_for('static', filename='js/solver_anim.js') }}"></script>
     <script src="{{ url_for('static', filename='js/cube_input.js') }}"></script>
     <script src="{{ url_for('static', filename='js/cube_3d.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
 </body>
-
 </html>

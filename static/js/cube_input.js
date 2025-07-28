@@ -1,13 +1,12 @@
-const COLORS = [
-    { name: 'white', hex: '#fff', k: 'U' },    // Up
-    { name: 'red', hex: '#ff2222', k: 'R' },   // Right
+let COLORS = [
+    { name: 'white', hex: '#fff', k: 'U' },    // Up
+    { name: 'red', hex: '#ff2222', k: 'R' },   // Right
     { name: 'green', hex: '#17d016', k: 'F' }, // Front
     { name: 'yellow', hex: '#ffe900', k: 'D' },// Down
     { name: 'orange', hex: '#ff9900', k: 'L' },// Left
-    { name: 'blue', hex: '#1177ff', k: 'B' }   // Back
+    { name: 'blue', hex: '#1177ff', k: 'B' }   // Back
 ];
 let selectedColor = 0;
-
 
 let cubeState = Array(6).fill().map(() => Array(3).fill().map(() => Array(3).fill(0)));
 
@@ -23,6 +22,41 @@ const COLOR_IDX_TO_FACE_LETTER = {
     4: 'L', // orange
     5: 'B'  // blue
 };
+
+// Use user-selected colors if available
+function getUserColors() {
+    let stored = localStorage.getItem('cube_user_colors');
+    if (stored) {
+        let arr = JSON.parse(stored);
+        if (Array.isArray(arr) && arr.length === 6) return arr;
+    }
+    // Default colors
+    return ['#fff', '#ff2222', '#17d016', '#ffe900', '#ff9900', '#1177ff'];
+}
+function getColorDefs() {
+    const userColors = getUserColors();
+    return [
+        { name: 'up', hex: userColors[0], k: 'U' },
+        { name: 'right', hex: userColors[1], k: 'R' },
+        { name: 'front', hex: userColors[2], k: 'F' },
+        { name: 'down', hex: userColors[3], k: 'D' },
+        { name: 'left', hex: userColors[4], k: 'L' },
+        { name: 'back', hex: userColors[5], k: 'B' }
+    ];
+}
+window.initManualCubeWithUserColors = function(userColors) {
+    COLORS = [
+        { name: 'up', hex: userColors[0], k: 'U' },
+        { name: 'right', hex: userColors[1], k: 'R' },
+        { name: 'front', hex: userColors[2], k: 'F' },
+        { name: 'down', hex: userColors[3], k: 'D' },
+        { name: 'left', hex: userColors[4], k: 'L' },
+        { name: 'back', hex: userColors[5], k: 'B' }
+    ];
+    resetCube();
+    drawColorBtns();
+};
+COLORS = getColorDefs();
 
 function drawColorBtns() {
     const row = document.getElementById('color-row');
@@ -126,12 +160,13 @@ function submitCube() {
     })
         .then(r => r.json())
         .then(data => {
-            const box = document.getElementById('solution-box');
             if (data.success) {
-                box.innerHTML = `<b>Solution:</b><br>${data.solution}`;
-                loadSolutionAnimation(data.solution);
+                // Redirect to solution page with cube string and solution as query params
+                const params = new URLSearchParams({ cube_str: cubeStr, solution: data.solution });
+                window.location.href = `/solution?${params.toString()}`;
             } else {
-                box.innerHTML = `<span style="color:#ff4a4a"><b>Error:</b> ${data.error}</span>`;
+                // Show error on this page
+                alert('Error: ' + data.error);
             }
         });
 }
@@ -150,50 +185,12 @@ function resetCube() {
     update3DCube();
 }
 
-// Randomize stickers ensuring centers fixed and exactly 9 stickers per color
-function randomizeCube() {
-    // Fix centers: each face's center is color index = face index
-    for (let f = 0; f < 6; f++) {
-        cubeState[f][1][1] = f;
-    }
-
-    // Create array with 8 stickers per color (except centers)
-    let stickers = [];
-    for (let color = 0; color < 6; color++) {
-        for (let count = 0; count < 8; count++) {
-            stickers.push(color);
-        }
-    }
-
-    // Shuffle the 48 sticker array
-    for (let i = stickers.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [stickers[i], stickers[j]] = [stickers[j], stickers[i]];
-    }
-
-    // Assign stickers to all positions except centers
-    let index = 0;
-    for (let f = 0; f < 6; f++) {
-        for (let r = 0; r < 3; r++) {
-            for (let c = 0; c < 3; c++) {
-                if (r === 1 && c === 1) {
-                    // Center already set
-                    continue;
-                }
-                cubeState[f][r][c] = stickers[index++];
-            }
-        }
-    }
-
-    drawCube();
-    updateCubeString();
-    update3DCube();
-}
+// Remove randomize button logic and cube string display
 
 document.addEventListener('DOMContentLoaded', () => {
     drawColorBtns();
     resetCube(); // Reset initializes the cube with centers fixed and uniform colors
     document.getElementById('submit-btn').onclick = submitCube;
     document.getElementById('reset-btn').onclick = resetCube;
-    document.getElementById('random-btn').onclick = randomizeCube;
+    // No randomize button
 });

@@ -1,24 +1,39 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Choose Solution</title>
-    <link rel="stylesheet" href="/static/css/styles.css">
+    <meta charset="UTF-8">
+    <title>Cube Solution</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css?family=Montserrat:700,400" rel="stylesheet">
 </head>
 <body>
-    <h2>Pick a Solution</h2>
-    <ul id="solutions-list"></ul>
-    <script>
-        const solutions = JSON.parse(localStorage.getItem("solutions"));
-        const ul = document.getElementById("solutions-list");
-        solutions.forEach((sol, idx) => {
-            let li = document.createElement("li");
-            li.innerHTML = `Solution ${idx+1} (${sol.algo}): ${sol.moves.length} moves <button>Solve Step by Step</button>`;
-            li.querySelector("button").onclick = () => {
-                localStorage.setItem("selected_moves", JSON.stringify(sol.moves));
-                window.location.href = "/animate";
-            }
-            ul.appendChild(li);
-        });
-    </script>
+    <div class="solution-header">
+        <h1>Rubik’s Cube Solution</h1>
+        <div class="solution-cube-string" id="solution-cube-string"></div>
+    </div>
+    <div class="solution-advanced-section">
+        <div id="cube-3d-solution" class="cube-3d-solution" aria-label="3D Cube Preview"></div>
+        <div class="progress-bar-section">
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="progress-bar-fill"></div>
+            </div>
+            <div class="progress-bar-label" id="progress-bar-label"></div>
+        </div>
+        <div class="move-description-section">
+            <div class="move-indicator" id="move-indicator"></div>
+            <div class="move-description" id="move-description"></div>
+        </div>
+        <div class="move-controls">
+            <button id="prev-move-btn" class="move-btn" aria-label="Previous Move">&#9194;&#65039; Prev</button>
+            <button id="next-move-btn" class="move-btn" aria-label="Next Move">Next &#9193;&#65039;</button>
+        </div>
+        <div class="move-image-section">
+            <img id="move-image" style="height:64px;vertical-align:middle;" alt="Move diagram">
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.146.0/build/three.min.js"></script>
+    <script src="/static/js/solver_anim.js"></script>
+    <script src="/static/js/solution_viewer.js"></script>
 </body>
 </html>

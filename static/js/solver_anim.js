@@ -4,9 +4,23 @@ let currentMoveIdx = -1;
 let animating = false;
 let animationTimeout = null;
 
+// Move order toggle logic
+let moveOrderAscending = true;
+const moveOrderToggle = document.getElementById('move-order-toggle');
+const moveOrderLabel = document.getElementById('move-order-label');
+
 // Helper: Parse solution string to array of moves
 function parseSolution(solutionStr) {
     return solutionStr.trim().split(/\s+/).filter(Boolean);
+}
+
+// Helper: Get move at index in current order
+function getMoveAt(idx) {
+    if (moveOrderAscending) {
+        return solutionMoves[idx];
+    } else {
+        return solutionMoves[solutionMoves.length - 1 - idx];
+    }
 }
 
 // Update UI with current move and image hint
@@ -19,8 +33,8 @@ function showMove(idx) {
         img.src = '';
         return;
     }
-    let move = solutionMoves[idx];
-    indicator.textContent = `Step ${idx + 1}/${solutionMoves.length}: ${move}`;
+    let move = getMoveAt(idx);
+    indicator.textContent = `Step ${moveOrderAscending ? idx + 1 : solutionMoves.length - idx}/${solutionMoves.length}: ${move}`;
 
     // Map move name to image filename, e.g. "R'" to "Rprime.png"
     let imgFile = move.replace("'", "prime");
@@ -58,7 +72,7 @@ function animateMove(idx) {
         animating = false;
         return;
     }
-    applyMoveTo3DCube(solutionMoves[idx], () => {
+    applyMoveTo3DCube(getMoveAt(idx), () => {
         currentMoveIdx = idx;
         showMove(currentMoveIdx);
 
@@ -97,7 +111,7 @@ function prevMove() {
     pauseMoves();
     if (currentMoveIdx >= 0) {
         // Reverse the last move applied
-        reverseMoveTo3DCube(solutionMoves[currentMoveIdx], () => {
+        reverseMoveTo3DCube(getMoveAt(currentMoveIdx), () => {
             currentMoveIdx--;
             showMove(currentMoveIdx);
         });
@@ -112,10 +126,14 @@ function nextMove() {
 }
 
 // Hook up buttons (make sure buttons exist in DOM)
-document.getElementById('play-move-btn').onclick = playMoves;
-document.getElementById('pause-move-btn').onclick = pauseMoves;
-document.getElementById('prev-move-btn').onclick = prevMove;
-document.getElementById('next-move-btn').onclick = nextMove;
+const playBtn = document.getElementById('play-move-btn');
+if (playBtn) playBtn.onclick = playMoves;
+const pauseBtn = document.getElementById('pause-move-btn');
+if (pauseBtn) pauseBtn.onclick = pauseMoves;
+const prevBtn = document.getElementById('prev-move-btn');
+if (prevBtn) prevBtn.onclick = prevMove;
+const nextBtn = document.getElementById('next-move-btn');
+if (nextBtn) nextBtn.onclick = nextMove;
 
 // Entry point to load solution from solver's string and reset animation state
 function loadSolutionAnimation(solutionStr) {

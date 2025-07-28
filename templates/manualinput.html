@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Rubik’s Cube Manual Input</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css?family=Montserrat:700,400" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/three@0.146.0/build/three.min.js"></script>
+</head>
+<body>
+    <h1>Rubik’s Cube Manual Input</h1>
+    <section class="instructions-section">
+        <h2>Step 1: Choose Your Cube Colors</h2>
+        <ol class="instructions-list">
+            <li><b>Pick the 6 colors</b> that match your cube using the palette below. Assign each to a face (Up, Right, Front, Down, Left, Back).</li>
+            <li>Click <b>Continue</b> to proceed to manual input.</li>
+        </ol>
+    </section>
+    <div id="color-palette-section">
+        <form id="color-palette-form">
+            <div class="color-palette-row">
+                <label>Up (U): <input type="color" id="color-up" value="#ffffff"></label>
+                <label>Right (R): <input type="color" id="color-right" value="#ff2222"></label>
+                <label>Front (F): <input type="color" id="color-front" value="#17d016"></label>
+                <label>Down (D): <input type="color" id="color-down" value="#ffe900"></label>
+                <label>Left (L): <input type="color" id="color-left" value="#ff9900"></label>
+                <label>Back (B): <input type="color" id="color-back" value="#1177ff"></label>
+            </div>
+            <button type="submit" class="submit-btn" id="palette-continue-btn">Continue</button>
+        </form>
+    </div>
+    <div id="manual-cube-section">
+        <section class="instructions-section">
+            <h2>Step 2: Enter Your Cube</h2>
+            <ol class="instructions-list">
+                <li><b>Select a color</b> from the palette below.</li>
+                <li><b>Click on the stickers</b> in the 2D cube net to assign the selected color.</li>
+                <li><b>Repeat</b> for all stickers on all faces. <br><span class="inst-note">(Centers are fixed and must match your chosen colors.)</span></li>
+                <li>Watch the <b>3D preview</b> update live as you edit.</li>
+                <li>When finished, <b>check the status</b> below the buttons. Only a valid cube can be submitted.</li>
+                <li>Click <b>Submit Cube</b> to solve. <br><span class="inst-note">(You can also Reset the cube.)</span></li>
+            </ol>
+        </section>
+        <div class="colors-row" id="color-row"></div>
+        <div class="cube-input-section">
+            <div>
+                <div class="cube-2d-net">
+                    <div class="face up" id="face-up"></div>
+                    <div class="face down" id="face-down"></div>
+                    <div class="face left" id="face-left"></div>
+                    <div class="face right" id="face-right"></div>
+                    <div class="face front" id="face-front"></div>
+                    <div class="face back" id="face-back"></div>
+                </div>
+                <div style="margin-top: 18px;" class="buttons">
+                    <button class="reset-btn" id="reset-btn">Reset</button>
+                    <button class="submit-btn" id="submit-btn">Submit Cube</button>
+                </div>
+                <div id="cube-status" class="status"></div>
+            </div>
+            <div id="cube-3d-preview"></div>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='js/solver_anim.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/cube_input.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/cube_3d.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/manual_palette.js') }}"></script>
+</body>
+</html>

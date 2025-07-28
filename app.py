@@ -13,6 +13,10 @@ def is_valid_cube_string(cube_str):
 def index():
     return render_template("index.html")
 
+@app.route("/manual")
+def m_input():
+    return render_template("manualinput.html")
+
 @app.route("/solve", methods=["POST"])
 def solve():
     data = request.json
@@ -26,6 +30,10 @@ def solve():
         return jsonify({"success": True, "solution": solution})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
+
+@app.route('/solution')
+def solution():
+    return render_template('solution.html')
 
 if __name__ == "__main__":
     app.run(debug=True)
