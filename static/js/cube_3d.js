@@ -1,14 +1,25 @@
 let scene, camera, renderer, cubelets = [];
 
 function init3D() {
+    // Check if THREE.js is available
+    if (typeof THREE === 'undefined') {
+        console.error('THREE.js is not loaded. Make sure to include the THREE.js library before this script.');
+        return;
+    }
+    
     const w = 320, h = 320;
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setClearColor(0x181818, 0.0);
     renderer.setSize(w, h);
-    document.getElementById('cube-3d-preview').innerHTML = "";
-    document.getElementById('cube-3d-preview').appendChild(renderer.domElement);
+    const previewElement = document.getElementById('cube-3d-preview');
+    if (previewElement) {
+        previewElement.innerHTML = "";
+        previewElement.appendChild(renderer.domElement);
+    } else {
+        console.warn('cube-3d-preview element not found');
+    }
 
     camera.position.set(5, 6, 7);
     camera.lookAt(scene.position);
@@ -61,7 +72,12 @@ function animate() {
     renderer.render(scene, camera);
 }
 
-document.addEventListener('DOMContentLoaded', init3D);
+document.addEventListener('DOMContentLoaded', function() {
+    // Only initialize 3D if the preview element exists
+    if (document.getElementById('cube-3d-preview')) {
+        init3D();
+    }
+});
 
 function getFaceCubelets(face) {
     let res = [];

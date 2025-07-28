@@ -60,6 +60,10 @@ COLORS = getColorDefs();
 
 function drawColorBtns() {
     const row = document.getElementById('color-row');
+    if (!row) {
+        console.warn('color-row element not found, skipping drawColorBtns');
+        return;
+    }
     row.innerHTML = '';
     COLORS.forEach((c, i) => {
         let btn = document.createElement('div');
@@ -88,7 +92,9 @@ function drawCube() {
                 cell.style.background = COLORS[selectedColor].hex;
                 cell.classList.add('selected');
                 setTimeout(() => cell.classList.remove('selected'), 250);
-                update3DCube();
+                if (typeof update3DCube === 'function') {
+                    update3DCube();
+                }
                 updateCubeString();
             };
             grid.appendChild(cell);
@@ -112,7 +118,10 @@ function getKociembaCubeString() {
 
 function updateCubeString() {
     const cubeStr = getKociembaCubeString();
-    document.getElementById('cube-string').textContent = cubeStr;
+    const cubeStringElement = document.getElementById('cube-string');
+    if (cubeStringElement) {
+        cubeStringElement.textContent = cubeStr;
+    }
     validateCube();
 }
 
@@ -182,7 +191,9 @@ function resetCube() {
     }
     drawCube();
     updateCubeString();
-    update3DCube();
+    if (typeof update3DCube === 'function') {
+        update3DCube();
+    }
 }
 
 // Remove randomize button logic and cube string display
