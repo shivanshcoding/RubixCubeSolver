@@ -1,0 +1,355 @@
+/* Solution Page Specific Styles */
+
+/* Page Layout */
+body {
+  background: var(--bg-primary);
+  position: relative;
+  min-height: 100vh;
+  padding-top: 6rem;
+}
+
+/* Solution Container */
+.solution-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+.solution-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.solution-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  background: var(--gradient-success);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.solution-subtitle {
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
+/* 3D Cube Viewer */
+.cube-viewer-container {
+  background: var(--bg-card);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border-light);
+  border-radius: var(--border-radius-xl);
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: var(--shadow-lg);
+  position: relative;
+  overflow: hidden;
+}
+
+.cube-viewer-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--gradient-success);
+}
+
+.cube-viewer {
+  width: 100%;
+  height: 400px;
+  border-radius: var(--border-radius-lg);
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-medium);
+  position: relative;
+  overflow: hidden;
+}
+
+#cube-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.cube-controls {
+  display: flex;
+  justify-content: center;
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.cube-control-btn,
+.move-btn {
+  padding: 0.75rem 1.25rem;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 2px solid var(--border-medium);
+  border-radius: var(--border-radius-lg);
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.cube-control-btn:hover {
+  background: var(--accent-primary);
+  color: var(--text-inverse);
+  border-color: var(--accent-primary);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Solution Steps */
+.solution-steps-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto 2.5rem auto;
+}
+
+.solution-steps {
+  background: var(--bg-card);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border-light);
+  border-radius: var(--border-radius-xl);
+  padding: 2rem;
+  box-shadow: var(--shadow-md);
+}
+
+.solution-steps h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.steps-list {
+  list-style: none;
+  counter-reset: step-counter;
+}
+
+.step-item {
+  counter-increment: step-counter;
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--border-light);
+  transition: all var(--transition-normal);
+  cursor: pointer;
+}
+
+.step-item::before {
+  content: counter(step-counter);
+  width: 2rem;
+  height: 2rem;
+  background: var(--gradient-primary);
+  color: var(--text-inverse);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  margin-right: 1rem;
+  flex-shrink: 0;
+}
+
+.step-item:hover {
+  background: var(--accent-primary);
+  color: var(--text-inverse);
+  transform: translateX(5px);
+}
+
+.step-notation {
+  font-family: 'Courier New', monospace;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+/* Progress Panel */
+.progress-panel {
+  background: var(--bg-card);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border-light);
+  border-radius: var(--border-radius-xl);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-md);
+  height: fit-content;
+}
+
+.progress-panel h4 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.progress-info {
+  margin-bottom: 1rem;
+}
+
+.progress-label {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--border-radius-sm);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--gradient-success);
+  border-radius: var(--border-radius-sm);
+  transition: width var(--transition-normal);
+}
+
+/* Control Buttons */
+.solution-controls {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.control-btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: var(--border-radius-lg);
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.control-btn-play {
+  background: var(--gradient-success);
+  color: var(--text-inverse);
+}
+
+.control-btn-pause {
+  background: var(--gradient-warning);
+  color: var(--text-inverse);
+}
+
+.control-btn-reset {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 2px solid var(--border-medium);
+}
+
+.control-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Enhanced Layout */
+.solution-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2.5rem;
+  margin-bottom: 3rem;
+}
+
+.current-move {
+  margin-bottom: 2rem;
+}
+
+.move-indicator {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--accent-primary);
+  margin-bottom: 0.5rem;
+}
+
+.move-description {
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.cube-controls {
+  margin-top: 1.75rem;
+}
+
+.progress-panel {
+  position: sticky;
+  top: 6rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  body {
+    padding-top: 5rem;
+  }
+  
+  .solution-container {
+    padding: 0 1rem;
+  }
+  
+  .solution-title {
+    font-size: 2rem;
+  }
+  
+  .cube-viewer {
+    height: 300px;
+  }
+  
+  .solution-steps-container {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  
+  .progress-panel {
+    order: -1;
+  }
+  
+  .cube-controls,
+  .solution-controls {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .cube-control-btn,
+  .control-btn {
+    width: 100%;
+    max-width: 200px;
+  }
+}
+
+@media (max-width: 480px) {
+  .solution-title {
+    font-size: 1.8rem;
+  }
+  
+  .cube-viewer {
+    height: 250px;
+  }
+  
+  .solution-steps,
+  .progress-panel {
+    padding: 1rem;
+  }
+}

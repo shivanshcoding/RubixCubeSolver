@@ -49,10 +49,8 @@
         applyTheme(newTheme);
         
         // Add animation class for the toggle effect
-        if (themeIcon) {
-            themeIcon.classList.add('theme-transition');
-            setTimeout(() => themeIcon.classList.remove('theme-transition'), 300);
-        }
+        themeIcon.classList.add('theme-transition');
+        setTimeout(() => themeIcon.classList.remove('theme-transition'), 300);
     }
     
     /**

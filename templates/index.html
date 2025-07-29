@@ -1,13 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>Rubik’s Cube Solver</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Theme CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base-theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
     <!-- Google Fonts (Montserrat) -->
-    <link href="https://fonts.googleapis.com/css?family=Montserrat:700,400" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <!-- Preload theme toggle for better performance -->
+    <link rel="preload" href="{{ url_for('static', filename='js/theme-new.js') }}" as="script">
 </head>
+
 <body>
     <div class="background-animated"></div>
     <header class="main-header">
@@ -15,29 +22,35 @@
             <div class="logo" id="site-logo">
                 <!-- Simple Rubik's Cube SVG logo -->
                 <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="2" y="2" width="44" height="44" rx="8" fill="#fff"/>
-                  <rect x="2" y="2" width="44" height="44" rx="8" stroke="#1e3c72" stroke-width="4"/>
-                  <rect x="6" y="6" width="12" height="12" rx="2" fill="#ff3d00"/>
-                  <rect x="18" y="6" width="12" height="12" rx="2" fill="#ffd600"/>
-                  <rect x="30" y="6" width="12" height="12" rx="2" fill="#00c853"/>
-                  <rect x="6" y="18" width="12" height="12" rx="2" fill="#2962ff"/>
-                  <rect x="18" y="18" width="12" height="12" rx="2" fill="#fff"/>
-                  <rect x="30" y="18" width="12" height="12" rx="2" fill="#ffeb3b"/>
-                  <rect x="6" y="30" width="12" height="12" rx="2" fill="#ff6d00"/>
-                  <rect x="18" y="30" width="12" height="12" rx="2" fill="#d500f9"/>
-                  <rect x="30" y="30" width="12" height="12" rx="2" fill="#00bcd4"/>
+                    <rect x="2" y="2" width="44" height="44" rx="8" fill="#fff" />
+                    <rect x="2" y="2" width="44" height="44" rx="8" stroke="#1e3c72" stroke-width="4" />
+                    <rect x="6" y="6" width="12" height="12" rx="2" fill="#ff3d00" />
+                    <rect x="18" y="6" width="12" height="12" rx="2" fill="#ffd600" />
+                    <rect x="30" y="6" width="12" height="12" rx="2" fill="#00c853" />
+                    <rect x="6" y="18" width="12" height="12" rx="2" fill="#2962ff" />
+                    <rect x="18" y="18" width="12" height="12" rx="2" fill="#fff" />
+                    <rect x="30" y="18" width="12" height="12" rx="2" fill="#ffeb3b" />
+                    <rect x="6" y="30" width="12" height="12" rx="2" fill="#ff6d00" />
+                    <rect x="18" y="30" width="12" height="12" rx="2" fill="#d500f9" />
+                    <rect x="30" y="30" width="12" height="12" rx="2" fill="#00bcd4" />
                 </svg>
             </div>
-            <button class="theme-toggle" id="theme-toggle" aria-label="Toggle dark/light mode">
-                <span class="theme-icon" id="theme-icon">🌙</span>
-            </button>
+            <div>
+                <h1>Rubik’s Cube Solver</h1>
+                <p class="subtitle">Solve your cube with AI, manual input, or online scrambles!</p>
+            </div>
+            <div>
+                <button class="theme-toggle" id="theme-toggle" aria-label="Toggle dark/light mode">
+                    <span class="theme-icon" id="theme-icon">🌙</span>
+                </button>
+            </div>
         </div>
-        <h1>Rubik’s Cube Solver</h1>
-        <p class="subtitle">Solve your cube with AI, manual input, or online scrambles!</p>
+
     </header>
     <section class="video-hero">
-        <video id="hero-video" autoplay loop muted playsinline poster="https://images.pexels.com/photos/163077/cube-puzzle-colorful-play-163077.jpeg?auto=compress&w=600">
-            <source src="https://videos.pexels.com/video-files/856192/856192-hd_1920_1080_25fps.mp4" type="video/mp4">
+        <video id="hero-video" autoplay loop muted playsinline
+            poster="{{ url_for('static', filename='images/cube-poster.jpg') }}">
+            <source src="{{ url_for('static', filename='videos/rubiks-cube-demo.mp4') }}" type="video/mp4">
             Your browser does not support the video tag.
         </video>
         <div class="video-overlay"></div>
@@ -64,14 +77,62 @@
         </a>
     </main>
     <section class="about-section">
-        <h2>About This Project</h2>
-        <p>
-            This is where I'll share how I built this Rubik's Cube Solver, the technologies I used, and what I learned along the way. (You can edit this text to add your story!)
-        </p>
+        <h2>🚀 Advanced Rubik's Cube Solver Platform</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🧠</div>
+                <h3>Multiple Solving Algorithms</h3>
+                <p>Implements BFS, A*, and IDDFS algorithms with the powerful Kociemba library for optimal solutions.
+                </p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🤖</div>
+                <h3>AI-Powered Detection</h3>
+                <p>OpenCV and CNN-based face detection to automatically analyze cube states from camera input.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🎮</div>
+                <h3>Interactive 3D Visualization</h3>
+                <p>Real-time 3D cube rendering with Three.js, featuring smooth animations and step-by-step solution
+                    playback.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🎨</div>
+                <h3>Custom Color Palettes</h3>
+                <p>Personalize your solving experience with custom color schemes and themes.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📱</div>
+                <h3>Responsive Design</h3>
+                <p>Beautiful, modern interface that works seamlessly across desktop, tablet, and mobile devices.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🌐</div>
+                <h3>Online Cube Solver</h3>
+                <p>Interactive online cube with scrambling, solving, and integration with the main solver platform.</p>
+            </div>
+        </div>
+
+        <div class="tech-stack">
+            <h3>🛠️ Technology Stack</h3>
+            <div class="tech-badges">
+                <span class="tech-badge">Python</span>
+                <span class="tech-badge">Flask</span>
+                <span class="tech-badge">OpenCV</span>
+                <span class="tech-badge">TensorFlow</span>
+                <span class="tech-badge">Three.js</span>
+                <span class="tech-badge">D3.js</span>
+                <span class="tech-badge">JavaScript ES6</span>
+                <span class="tech-badge">HTML5</span>
+                <span class="tech-badge">CSS3</span>
+                <span class="tech-badge">Kociemba</span>
+            </div>
+        </div>
     </section>
-    <script src="{{ url_for('static', filename='js/solver_anim.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/cube_input.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/cube_3d.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/theme-new.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/solver_anim.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/cube_input.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/cube_3d.js') }}" defer></script>
 </body>
+
 </html>

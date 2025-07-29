@@ -8,7 +8,7 @@ let animationTimeout = null;
 // 3D Cube Setup
 let scene, camera, renderer, cubelets = [];
 import { getColorDefs, parseMove } from './color_defs.js';
-let COLORS = getColorDefs();
+let COLORS = [];
 let cubeState;
 let cubeStr = '';
 
@@ -67,29 +67,47 @@ function init3DSolutionCube() {
     animate3DSolutionCube();
     reset3DSolutionCube();
 }
+
 function animate3DSolutionCube() {
     requestAnimationFrame(animate3DSolutionCube);
     scene.rotation.y += 0.009;
     renderer.render(scene, camera);
 }
+
 function update3DSolutionCube() {
-    if (!scene || !cubelets || !cubeState) return;
+    if (!scene || !cubelets || !cubeState || !COLORS || COLORS.length === 0) return;
+
+    // Get color hex values from COLORS array
+    const getColorHex = (colorIdx) => {
+        if (COLORS[colorIdx] && COLORS[colorIdx].hex) {
+            return COLORS[colorIdx].hex;
+        }
+        // Fallback colors if user colors not available
+        const fallbackColors = ['#ffffff', '#ff2222', '#17d016', '#ffe900', '#ff9900', '#1177ff'];
+        return fallbackColors[colorIdx] || '#666666';
+    };
+
     for (let c of cubelets) {
         let { mesh, x, y, z } = c;
+        // Reset all faces to dark color first
         for (let i = 0; i < 6; i++)
             mesh.material[i].color.set(0x232323);
-        if (y === 1) mesh.material[2].color.set(COLORS[cubeState[0][z + 1][x + 1]]);
-        if (y === -1) mesh.material[3].color.set(COLORS[cubeState[3][2 - (z + 1)][x + 1]]);
-        if (x === 1) mesh.material[0].color.set(COLORS[cubeState[1][2 - (y + 1)][2 - (z + 1)]]);
-        if (x === -1) mesh.material[1].color.set(COLORS[cubeState[4][2 - (y + 1)][z + 1]]);
-        if (z === 1) mesh.material[4].color.set(COLORS[cubeState[2][2 - (y + 1)][x + 1]]);
-        if (z === -1) mesh.material[5].color.set(COLORS[cubeState[5][2 - (y + 1)][2 - (x + 1)]]);
+
+        // Apply colors based on cube state
+        if (y === 1) mesh.material[2].color.set(getColorHex(cubeState[0][z + 1][x + 1])); // Up face
+        if (y === -1) mesh.material[3].color.set(getColorHex(cubeState[3][2 - (z + 1)][x + 1])); // Down face
+        if (x === 1) mesh.material[0].color.set(getColorHex(cubeState[1][2 - (y + 1)][2 - (z + 1)])); // Right face
+        if (x === -1) mesh.material[1].color.set(getColorHex(cubeState[4][2 - (y + 1)][z + 1])); // Left face
+        if (z === 1) mesh.material[4].color.set(getColorHex(cubeState[2][2 - (y + 1)][x + 1])); // Front face
+        if (z === -1) mesh.material[5].color.set(getColorHex(cubeState[5][2 - (y + 1)][2 - (x + 1)])); // Back face
     }
 }
+
 function reset3DSolutionCube() {
     cubeState = parseCubeString(cubeStr);
     update3DSolutionCube();
 }
+
 function animateFaceRotation(face, direction, times, callback) {
     function oneTurn(turnNum) {
         const facelets = getFaceCubelets(face);
@@ -166,6 +184,7 @@ function getFaceCubelets(face) {
     }
     return res;
 }
+
 function rotateFaceInCubeState(face, direction) {
     function rotateFaceMatrix(fidx, dir) {
         let faceArr = cubeState[fidx];
@@ -196,6 +215,8 @@ function showMove(idx) {
     }
     let move = solutionMoves[idx];
     indicator.textContent = `Step ${idx + 1}/${solutionMoves.length}: ${move}`;
+    // update progress bar
+    updateProgressBar(idx + 1, solutionMoves.length);
     let imgFile = move.replace("'", "prime");
     img.src = `/static/img/${imgFile}.png`;
     // Animate the move on the 3D cube
@@ -295,6 +316,15 @@ function loadSolutionAnimation(solutionStr) {
     showMove(-1);
 }
 
+function updateProgressBar(done, total) {
+    const fill = document.getElementById('progress-bar-fill');
+    const label = document.getElementById('progress-bar-label');
+    if (!fill || !label) return;
+    const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+    fill.style.width = pct + '%';
+    label.textContent = `Step ${done}/${total}`;
+}
+
 // Button event listeners
 const playBtn = document.getElementById('play-move-btn');
 if (playBtn) playBtn.onclick = playMoves;
@@ -304,6 +334,14 @@ const prevBtn = document.getElementById('prev-move-btn');
 if (prevBtn) prevBtn.onclick = prevMove;
 const nextBtn = document.getElementById('next-move-btn');
 if (nextBtn) nextBtn.onclick = nextMove;
+const reloadBtn = document.getElementById('reload-move-btn');
+if (reloadBtn) reloadBtn.onclick = () => {
+    pauseMoves();
+    reset3DSolutionCube();
+    currentMoveIdx = -1;
+    showMove(-1);
+    updateProgressBar(0, solutionMoves.length);
+};
 
 // On page load, parse query params and initialize everything
 window.addEventListener('DOMContentLoaded', () => {
@@ -311,8 +349,26 @@ window.addEventListener('DOMContentLoaded', () => {
     const url = new URL(window.location.href);
     const solutionStr = url.searchParams.get('solution') || '';
     cubeStr = url.searchParams.get('cube_str') || '';
+
+    // Initialize colors from user preferences
+    COLORS = getColorDefs();
+
+    // Log for debugging
+    console.log('Solution viewer initialized:');
+    console.log('Cube string:', cubeStr);
+    console.log('Solution:', solutionStr);
+    console.log('Colors:', COLORS);
+
     solutionMoves = parseSolution(solutionStr);
     currentMoveIdx = -1;
     init3DSolutionCube();
-    showMove(0);
-}); 
+
+    // Show initial state or first move
+    updateProgressBar(0, solutionMoves.length);
+    if (solutionMoves.length > 0) {
+        showMove(0);
+    } else {
+        // If no solution, just show the cube state
+        reset3DSolutionCube();
+    }
+});

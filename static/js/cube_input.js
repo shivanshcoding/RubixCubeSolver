@@ -206,12 +206,23 @@ function resetCube() {
 // Remove randomize button logic and cube string display
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Only draw color buttons and grid if manual-cube-section is visible
-    if (document.getElementById('manual-cube-section') && document.getElementById('manual-cube-section').style.display !== 'none') {
-        drawColorBtns();
-        resetCube();
+    // Always initialize color buttons
+    drawColorBtns();
+    resetCube();
+
+    // Continue button shows manual cube input section
+    const continueBtn = document.getElementById('continue-btn');
+    if (continueBtn) {
+        continueBtn.onclick = (e) => {
+            e.preventDefault();
+            document.getElementById('color-palette-section').style.display = 'none';
+            const manualSection = document.getElementById('manual-cube-section');
+            manualSection.style.display = '';
+            drawColorBtns();
+            resetCube();
+        };
     }
-    const submitBtn = document.getElementById('submit-btn');
+    const submitBtn = document.getElementById('submit-cube');
     if (submitBtn) submitBtn.onclick = submitCube;
     const resetBtn = document.getElementById('reset-btn');
     if (resetBtn) resetBtn.onclick = resetCube;

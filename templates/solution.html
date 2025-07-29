@@ -4,35 +4,101 @@
     <meta charset="UTF-8">
     <title>Cube Solution</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="/static/css/style.css">
-    <link href="https://fonts.googleapis.com/css?family=Montserrat:700,400" rel="stylesheet">
+    <!-- Theme CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base-theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/solution.css') }}">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Preload theme script for better performance -->
+    <link rel="preload" href="{{ url_for('static', filename='js/theme.js') }}" as="script">
 </head>
 <body>
-    <div class="solution-header">
-        <h1>Rubik’s Cube Solution</h1>
+    <div class="back-button-container">
+        <a href="/" class="back-button">
+            <span>← Back to Home</span>
+        </a>
     </div>
-    <div class="solution-advanced-section">
-        <div id="cube-3d-solution" class="cube-3d-solution" aria-label="3D Cube Preview"></div>
-        <div class="progress-bar-section">
-            <div class="progress-bar-bg">
-                <div class="progress-bar-fill" id="progress-bar-fill"></div>
+    <div class="solution-container">
+        <div class="solution-header">
+            <h1 class="solution-title">Rubik's Cube Solution</h1>
+            <p class="solution-subtitle">Follow the step-by-step moves to solve your cube</p>
+        </div>
+        
+        <div class="solution-main">
+            <!-- 3D Cube Viewer -->
+            <div class="cube-viewer-container">
+                <div id="cube-3d-solution" class="cube-viewer" aria-label="3D Cube Preview"></div>
+                <!-- Progress below viewer -->
+                <div class="viewer-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-bar-fill"></div>
+                    </div>
+                    <div class="progress-label" id="progress-bar-label">Step 0/0</div>
+                </div>
+                <div class="cube-controls">
+                    <button id="prev-move-btn" class="cube-control-btn">← Previous</button>
+                    <button id="play-move-btn" class="cube-control-btn">▶ Play</button>
+                    <button id="next-move-btn" class="cube-control-btn">Next →</button>
+                    <button id="reload-move-btn" class="cube-control-btn">🔄 Restart</button>
+                </div>
             </div>
-            <div class="progress-bar-label" id="progress-bar-label"></div>
+            
+            <!-- Solution Steps and Progress -->
+            <div class="solution-steps-container">
+                <div class="solution-steps">
+                    <h3>Solution Steps</h3>
+                    <div class="current-move">
+                        <div class="move-indicator" id="move-indicator">Ready to start</div>
+                        <div class="move-description" id="move-description">Click Next to begin the solution</div>
+                    </div>
+                    <div class="move-instructions">
+                        <h4>Move Notation Guide:</h4>
+                        <ul>
+                            <li><strong>R</strong> - Right face clockwise</li>
+                            <li><strong>R'</strong> - Right face counter-clockwise</li>
+                            <li><strong>U</strong> - Up face clockwise</li>
+                            <li><strong>F</strong> - Front face clockwise</li>
+                            <li><strong>L</strong> - Left face clockwise</li>
+                            <li><strong>D</strong> - Down face clockwise</li>
+                            <li><strong>B</strong> - Back face clockwise</li>
+                        </ul>
+                    </div>
+                </div>
+                <h4>Progress</h4>
+                <div class="progress-info">
+                    <span>Current Step</span>
+                    <span id="progress-bar-label">0/0</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-bar-fill"></div>
+                    </div>
+
+                </div>
+            </div>
         </div>
-        <div class="move-description-section">
-            <div class="move-indicator" id="move-indicator"></div>
-            <div class="move-description" id="move-description"></div>
-        </div>
-        <div class="move-controls">
-            <button id="prev-move-btn" class="move-btn" aria-label="Previous Move">&#9194;&#65039; Prev</button>
-            <button id="next-move-btn" class="move-btn" aria-label="Next Move">Next &#9193;&#65039;</button>
-        </div>
-        <!-- <div class="move-image-section">
-            <img id="move-image" style="height:64px;vertical-align:middle;" alt="Move diagram">
-        </div> -->
     </div>
     <script src="https://cdn.jsdelivr.net/npm/three@0.146.0/build/three.min.js"></script>
-    <script src="/static/js/solver_anim.js"></script>
-    <script type="module" src="/static/js/solution_viewer.js"></script>
+    <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
+    <!-- Solution viewer handles animation and controls -->
+    <script type="module" src="{{ url_for('static', filename='js/solution_viewer.js') }}"></script>
+    <script>
+        // Update progress bar based on current move
+        function updateProgressBar() {
+            const progressFill = document.getElementById('progress-bar-fill');
+            const progressLabel = document.getElementById('progress-bar-label');
+            const url = new URL(window.location.href);
+            const solutionStr = url.searchParams.get('solution') || '';
+            const moves = solutionStr.trim().split(/\s+/).filter(Boolean);
+            
+            if (moves.length > 0) {
+                progressLabel.textContent = `Solution: ${moves.length} moves`;
+            } else {
+                progressLabel.textContent = 'No solution provided';
+            }
+        }
+        
+        // Initialize progress on page load
+        window.addEventListener('DOMContentLoaded', updateProgressBar);
+    </script>
 </body>
 </html>

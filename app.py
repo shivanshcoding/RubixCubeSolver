@@ -19,9 +19,40 @@ def m_input():
 
 @app.route("/solve", methods=["POST"])
 def solve():
-    data = request.json
-    cube_str = data.get("cube_str", "")
-
+    # Handle both JSON (from manual input) and form data (from online cube)
+    if request.is_json:
+        data = request.json
+        cube_str = data.get("cube_str", "")
+        source = "manual_input"
+    else:
+        cube_str = request.form.get("cube_string", "")
+        source = request.form.get("source", "manual_input")
+    
+    # For online cube transfers, redirect to solution page with cube state
+    if source == "online_cube":
+        try:
+            # Convert cube state if needed and validate
+            if cube_str and len(cube_str) >= 54:
+                # Extract first 54 characters if longer
+                cube_str = cube_str[:54]
+                
+                # Try to solve the cube
+                solution = kociemba.solve(cube_str)
+                
+                # Redirect to solution page with the solution
+                from flask import redirect, url_for
+                return redirect(url_for('solution', 
+                                      cube_state=cube_str, 
+                                      solution=solution,
+                                      source='online_cube'))
+            else:
+                # Redirect back with error
+                return redirect(url_for('online_scrambles') + '?error=invalid_cube')
+        except Exception as e:
+            # Redirect back with error
+            return redirect(url_for('online_scrambles') + f'?error={str(e)}')
+    
+    # Handle JSON requests (original manual input functionality)
     if not is_valid_cube_string(cube_str):
         return jsonify({"success": False, "error": "Invalid cube input."})
 
@@ -34,6 +65,14 @@ def solve():
 @app.route('/solution')
 def solution():
     return render_template('solution.html')
+
+@app.route('/ai')
+def ai_input():
+    return render_template('ai_input.html')
+
+@app.route('/online')
+def online_scrambles():
+    return render_template('onlinecubesolving.html')
 
 if __name__ == "__main__":
     app.run(debug=True)

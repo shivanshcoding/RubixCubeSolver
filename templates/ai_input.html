@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Cube Detection - Rubik's Cube Solver</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Theme CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base-theme.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/ai-input.css') }}">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Preload theme script for better performance -->
+    <link rel="preload" href="{{ url_for('static', filename='js/theme.js') }}" as="script">
+</head>
+<body>
+    <div class="background-animated"></div>
+
+    <div class="back-button-container">
+        <a href="/" class="back-button">
+            <span>← Back to Home</span>
+        </a>
+    </div>
+    
+    <h1>🤖 AI Cube Detection</h1>
+    <section class="instructions-section">
+        <h2>How AI Detection Works</h2>
+        <ol class="instructions-list">
+            <li><b>Camera Access:</b> Allow camera permissions when prompted</li>
+            <li><b>Position Cube:</b> Hold your cube steady in front of the camera</li>
+            <li><b>Face Detection:</b> Show each face to the camera (6 faces total)</li>
+            <li><b>AI Analysis:</b> Our CNN model will detect colors with 90%+ accuracy</li>
+            <li><b>Auto-Solve:</b> Get your solution automatically!</li>
+        </ol>
+    </section>
+
+    <div class="ai-detection-area">
+        <div class="camera-section">
+            <div class="camera-container">
+                <video id="camera-feed" autoplay playsinline></video>
+                <canvas id="detection-canvas"></canvas>
+                <div class="camera-overlay">
+                    <div class="detection-frame"></div>
+                    <div class="face-indicator">
+                        <span id="current-face">Position cube to start</span>
+                    </div>
+                </div>
+            </div>
+            <div class="camera-controls">
+                <button id="start-camera-btn" class="btn btn-primary">Start Camera</button>
+                <button id="capture-face-btn" class="btn btn-primary" disabled>Capture Face</button>
+                <button id="reset-detection-btn" class="btn btn-secondary">Reset</button>
+            </div>
+        </div>
+
+        <div class="detection-progress">
+            <h3>Detection Progress</h3>
+            <div class="face-progress-grid">
+                <div class="face-progress-item" data-face="front">
+                    <div class="face-icon">🟩</div>
+                    <span>Front</span>
+                    <div class="progress-status">⏳</div>
+                </div>
+                <div class="face-progress-item" data-face="back">
+                    <div class="face-icon">🟦</div>
+                    <span>Back</span>
+                    <div class="progress-status">⏳</div>
+                </div>
+                <div class="face-progress-item" data-face="right">
+                    <div class="face-icon">🟥</div>
+                    <span>Right</span>
+                    <div class="progress-status">⏳</div>
+                </div>
+                <div class="face-progress-item" data-face="left">
+                    <div class="face-icon">🟧</div>
+                    <span>Left</span>
+                    <div class="progress-status">⏳</div>
+                </div>
+                <div class="face-progress-item" data-face="up">
+                    <div class="face-icon">⬜</div>
+                    <span>Up</span>
+                    <div class="progress-status">⏳</div>
+                </div>
+                <div class="face-progress-item" data-face="down">
+                    <div class="face-icon">🟨</div>
+                    <span>Down</span>
+                    <div class="progress-status">⏳</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="ai-status-section">
+        <div id="ai-status" class="status">Ready to start AI detection</div>
+        <div id="confidence-meter" class="confidence-meter" style="display: none;">
+            <span>Confidence: </span>
+            <div class="confidence-bar">
+                <div class="confidence-fill" id="confidence-fill"></div>
+            </div>
+            <span id="confidence-percentage">0%</span>
+        </div>
+    </div>
+
+    <div class="fallback-section">
+        <h3>Having Issues?</h3>
+        <p>If AI detection isn't working well, you can always use:</p>
+        <div class="fallback-buttons">
+            <a href="/manual" class="nav-card-small">
+                <div class="card-icon">📝</div>
+                <span>Manual Input</span>
+            </a>
+            <a href="/online" class="nav-card-small">
+                <div class="card-icon">🌐</div>
+                <span>Online Scrambles</span>
+                </a>
+            </div>
+        </div>
+    </main>
+
+    <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/ai_detection.js') }}" defer></script>
+    <script>
+        // Placeholder AI detection functionality
+        // This would integrate with your OpenCV/TensorFlow implementation
+        
+        const startCameraBtn = document.getElementById('start-camera-btn');
+        const captureFaceBtn = document.getElementById('capture-face-btn');
+        const resetDetectionBtn = document.getElementById('reset-detection-btn');
+        const cameraFeed = document.getElementById('camera-feed');
+        const aiStatus = document.getElementById('ai-status');
+        
+        let currentFaceIndex = 0;
+        const faces = ['front', 'back', 'right', 'left', 'up', 'down'];
+        
+        startCameraBtn.addEventListener('click', async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480 } 
+                });
+                cameraFeed.srcObject = stream;
+                startCameraBtn.disabled = true;
+                captureFaceBtn.disabled = false;
+                aiStatus.textContent = `Show the ${faces[currentFaceIndex]} face to the camera`;
+                document.getElementById('current-face').textContent = `Show ${faces[currentFaceIndex]} face`;
+            } catch (err) {
+                aiStatus.textContent = 'Camera access denied. Please allow camera permissions.';
+                aiStatus.className = 'status invalid';
+            }
+        });
+        
+        captureFaceBtn.addEventListener('click', () => {
+            // Simulate face capture
+            const currentFace = faces[currentFaceIndex];
+            const progressItem = document.querySelector(`[data-face="${currentFace}"]`);
+            progressItem.querySelector('.progress-status').textContent = '✅';
+            
+            currentFaceIndex++;
+            
+            if (currentFaceIndex < faces.length) {
+                aiStatus.textContent = `Show the ${faces[currentFaceIndex]} face to the camera`;
+                document.getElementById('current-face').textContent = `Show ${faces[currentFaceIndex]} face`;
+            } else {
+                aiStatus.textContent = 'All faces captured! Processing...';
+                captureFaceBtn.disabled = true;
+                
+                // Simulate processing
+                setTimeout(() => {
+                    aiStatus.textContent = 'Cube detected successfully! Redirecting to solution...';
+                    aiStatus.className = 'status valid';
+                    setTimeout(() => {
+                        window.location.href = '/solution';
+                    }, 2000);
+                }, 3000);
+            }
+        });
+        
+        resetDetectionBtn.addEventListener('click', () => {
+            currentFaceIndex = 0;
+            document.querySelectorAll('.progress-status').forEach(status => {
+                status.textContent = '⏳';
+            });
+            aiStatus.textContent = 'Ready to start AI detection';
+            aiStatus.className = 'status';
+            document.getElementById('current-face').textContent = 'Position cube to start';
+            
+            if (cameraFeed.srcObject) {
+                cameraFeed.srcObject.getTracks().forEach(track => track.stop());
+                cameraFeed.srcObject = null;
+            }
+            
+            startCameraBtn.disabled = false;
+            captureFaceBtn.disabled = true;
+        });
+    </script>
+</body>
+</html>

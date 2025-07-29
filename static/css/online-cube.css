@@ -1,0 +1,349 @@
+/* Online Cube Solving Page Specific Styles */
+
+/* Page Layout */
+body {
+  background: var(--bg-primary);
+  position: relative;
+  min-height: 100vh;
+  padding-top: 6rem;
+}
+
+/* Online Cube Container */
+.online-cube-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+.online-cube-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.online-cube-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  background: var(--gradient-tertiary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 0 30px rgba(79, 172, 254, 0.3);
+}
+
+.online-cube-subtitle {
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
+/* Interactive Cube Section */
+.interactive-cube-section {
+  display: grid;
+  grid-template-columns: 1fr 350px;
+  gap: 2rem;
+  margin-bottom: 3rem;
+}
+
+.cube-display {
+  background: var(--bg-card);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border-light);
+  border-radius: var(--border-radius-xl);
+  padding: 2rem;
+  box-shadow: var(--shadow-lg);
+  position: relative;
+  overflow: hidden;
+}
+
+.cube-display::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--gradient-tertiary);
+}
+
+.cube-canvas-container {
+  width: 100%;
+  height: 450px;
+  border-radius: var(--border-radius-lg);
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-medium);
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+
+#online-cube-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.cube-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--border-light);
+}
+
+.cube-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.status-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent-success);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.move-counter {
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Control Panel */
+.control-panel {
+  background: var(--bg-card);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border-light);
+  border-radius: var(--border-radius-xl);
+  padding: 2rem;
+  box-shadow: var(--shadow-md);
+  height: fit-content;
+}
+
+.control-panel h3 {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 1.5rem;
+  text-align: center;
+  background: var(--gradient-tertiary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.control-group {
+  margin-bottom: 2rem;
+}
+
+.control-group h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.control-group-icon {
+  font-size: 1.2rem;
+}
+
+/* Buttons */
+.btn-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.btn {
+  padding: 0.75rem 1.25rem;
+  border: none;
+  border-radius: var(--border-radius-lg);
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  text-align: center;
+}
+
+.btn-primary {
+  background: var(--gradient-primary);
+  color: var(--text-inverse);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-secondary {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 2px solid var(--border-medium);
+}
+
+.btn-danger {
+  background: var(--gradient-error);
+  color: var(--text-inverse);
+  box-shadow: var(--shadow-md);
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+/* Scramble Section */
+.scramble-section {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--border-light);
+}
+
+.scramble-display {
+  background: var(--bg-secondary);
+  padding: 1rem;
+  border-radius: var(--border-radius-lg);
+  margin-bottom: 1rem;
+  font-family: 'Courier New', monospace;
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-align: center;
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Timer */
+.timer-section {
+  text-align: center;
+  margin-top: 2rem;
+}
+
+.timer-display {
+  font-size: 2.5rem;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+  color: var(--text-primary);
+  margin: 1rem 0;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Stats Section */
+.stats-section {
+  margin-top: 2rem;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.stat-card {
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius-lg);
+  padding: 1rem;
+  text-align: center;
+  border: 1px solid var(--border-light);
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+  margin-bottom: 0.25rem;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Responsive Design */
+@media (max-width: 992px) {
+  .interactive-cube-section {
+    grid-template-columns: 1fr;
+  }
+  
+  .control-panel {
+    max-width: 600px;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 768px) {
+  body {
+    padding-top: 5rem;
+  }
+  
+  .online-cube-container {
+    padding: 0 1rem;
+  }
+  
+  .online-cube-title {
+    font-size: 2rem;
+  }
+  
+  .cube-display {
+    padding: 1.5rem;
+  }
+  
+  .cube-canvas-container {
+    height: 350px;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .online-cube-title {
+    font-size: 1.8rem;
+  }
+  
+  .online-cube-subtitle {
+    font-size: 1rem;
+  }
+  
+  .cube-canvas-container {
+    height: 280px;
+  }
+  
+  .control-panel {
+    padding: 1.5rem;
+  }
+  
+  .btn {
+    padding: 0.65rem 1rem;
+    font-size: 0.9rem;
+  }
+  
+  .timer-display {
+    font-size: 2rem;
+  }
+}
