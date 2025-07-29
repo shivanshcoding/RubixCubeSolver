@@ -79,5 +79,21 @@
     <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/cube_3d.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/manual_palette.js') }}"></script>
+
+<script>
+// Restore cube state from query param if provided
+window.addEventListener('DOMContentLoaded', () => {
+    const url = new URL(window.location.href);
+    const cubeStr = url.searchParams.get('cube_str');
+    if (cubeStr && cubeStr.length === 54 && window.loadCubeString) {
+        // Skip color selection step and show manual cube section
+        document.getElementById('color-palette-section').style.display = 'none';
+        const manualSection = document.getElementById('manual-cube-section');
+        manualSection.style.display = '';
+        // Load the cube string into the UI
+        window.loadCubeString(cubeStr);
+    }
+});
+</script>
 </body>
 </html>

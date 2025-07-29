@@ -109,67 +109,45 @@ function reset3DSolutionCube() {
 }
 
 function animateFaceRotation(face, direction, times, callback) {
-    function oneTurn(turnNum) {
-        const facelets = getFaceCubelets(face);
+    const axisMap = {
+        U: [0, 1, 0],  D: [0, -1, 0],
+        F: [0, 0, 1],  B: [0, 0, -1],
+        L: [-1, 0, 0], R: [1, 0, 0]
+    };
+    const axisVec = new THREE.Vector3(...axisMap[face]);
+    const totalAngle = (Math.PI / 2) * direction * times * -1;
 
-        // Axis for each face (from center outward)
-        const axisMap = {
-            U: [0, 1, 0],   // +Y (upward)
-            D: [0, -1, 0],  // -Y (downward)
-            F: [0, 0, 1],   // +Z (towards you)
-            B: [0, 0, -1],  // -Z (away from you)
-            L: [-1, 0, 0],  // -X (leftward)
-            R: [1, 0, 0],   // +X (rightward)
-        };
+    const affected = getFaceCubelets(face);
+    const frames = 20;
+    let frame = 0;
 
-        const axisVec = new THREE.Vector3(...axisMap[face]);
-
-        // Flip angle for faces where camera looks opposite to axis direction
-        const flipAngleFaces = ['R', 'B', 'D','L','U','F'];
-        const flip = flipAngleFaces.includes(face) ? -1 : 1;
-
-        const angle = (Math.PI / 2) * direction * flip;
-        const totalFrames = 20;
-        let frame = 0;
-
-        function rotateStep() {
-            if (frame < totalFrames) {
-                const deltaAngle = angle / totalFrames;
-                facelets.forEach(c => {
-                    c.mesh.rotateOnWorldAxis(axisVec, deltaAngle);
-                    c.mesh.position.applyAxisAngle(axisVec, deltaAngle);
-                    c.mesh.material.forEach(m => m.emissive?.setHex(0x00ffe7));
-                });
-                frame++;
-                requestAnimationFrame(rotateStep);
-            } else {
-                // Snap to grid to avoid floating point drift
-                facelets.forEach(c => {
-                    c.mesh.position.set(
-                        Math.round(c.mesh.position.x * 1000) / 1000,
-                        Math.round(c.mesh.position.y * 1000) / 1000,
-                        Math.round(c.mesh.position.z * 1000) / 1000
-                    );
-                    c.mesh.material.forEach(m => m.emissive?.setHex(0x000000));
-                });
-
-                // Update internal cube state
-                rotateFaceInCubeState(face, direction);
-
-                // Continue if more turns needed
-                if (turnNum + 1 < times) {
-                    oneTurn(turnNum + 1);
-                } else if (callback) {
-                    callback();
-                }
-            }
+    function step() {
+        if (frame < frames) {
+            const delta = totalAngle / frames;
+            affected.forEach(c => {
+                c.mesh.rotateOnWorldAxis(axisVec, delta);
+                c.mesh.position.applyAxisAngle(axisVec, delta);
+            });
+            frame++;
+            requestAnimationFrame(step);
+        } else {
+            // Snap positions to grid to avoid floating-point drift
+            affected.forEach(c => {
+                c.mesh.position.set(
+                    Math.round(c.mesh.position.x * 1000) / 1000,
+                    Math.round(c.mesh.position.y * 1000) / 1000,
+                    Math.round(c.mesh.position.z * 1000) / 1000
+                );
+            });
+            // Update logical cube state for each quarter turn
+            for (let i = 0; i < times; i++) rotateFaceInCubeState(face, direction);
+            if (callback) callback();
         }
-
-        rotateStep();
     }
 
-    oneTurn(0);
+    step();
 }
+
 
 function getFaceCubelets(face) {
     let res = [];
@@ -206,34 +184,29 @@ function rotateFaceInCubeState(face, direction) {
 
 function showMove(idx) {
     let indicator = document.getElementById('move-indicator');
-    let img = document.getElementById('move-image');
+
     if (idx < 0 || idx >= solutionMoves.length) {
         indicator.textContent = '';
-        img.src = '';
+
         reset3DSolutionCube();
         return;
     }
     let move = solutionMoves[idx];
     indicator.textContent = `Step ${idx + 1}/${solutionMoves.length}: ${move}`;
+    // Descriptive instruction text
+    const descEl = document.getElementById('move-description-text');
+    if (descEl) {
+        const faceNames = { U: 'Up', D: 'Down', F: 'Front', B: 'Back', L: 'Left', R: 'Right' };
+        const face = move[0];
+        let dirText = 'clockwise';
+        if (move.includes("'")) dirText = 'counter-clockwise';
+        else if (move.includes('2')) dirText = '180° turn';
+        descEl.textContent = `Rotate the ${faceNames[face] || face} face ${dirText}.`;
+    }
     // update progress bar
     updateProgressBar(idx + 1, solutionMoves.length);
-    let imgFile = move.replace("'", "prime");
-    img.src = `/static/img/${imgFile}.png`;
-    // Animate the move on the 3D cube
-    if (idx === 0) {
-        reset3DSolutionCube();
-    } else {
-        // Animate from previous move
-        const prevMove = solutionMoves[idx - 1];
-        const face = move[0];
-        let direction = 1;
-        let times = 1;
-        if (move.length > 1) {
-            if (move[1] === "'") direction = -1;
-            else if (move[1] === "2") times = 2;
-        }
-        animateFaceRotation(face, direction, times);
-    }
+
+    // No cube animation here — caller handles 3D updates to avoid double turns
 }
 
 function applyMoveTo3DCube(move, callback) {
@@ -274,14 +247,14 @@ function animateMove(idx) {
     });
 }
 
-function playMoves() {
-    if (animating) return;
-    animating = true;
-    if (currentMoveIdx >= solutionMoves.length - 1) {
-        currentMoveIdx = -1;
-    }
-    animateMove(currentMoveIdx + 1);
-}
+// function playMoves() {
+//     if (animating) return;
+//     animating = true;
+//     if (currentMoveIdx >= solutionMoves.length - 1) {
+//         currentMoveIdx = -1;
+//     }
+//     animateMove(currentMoveIdx + 1);
+// }
 
 function pauseMoves() {
     animating = false;
@@ -291,21 +264,31 @@ function pauseMoves() {
     }
 }
 
+// Navigate to previous move (single step)
 function prevMove() {
     pauseMoves();
-    if (currentMoveIdx >= 0) {
-        reverseMoveTo3DCube(solutionMoves[currentMoveIdx], () => {
-            currentMoveIdx--;
-            showMove(currentMoveIdx);
-        });
-    }
+    // Already at initial state
+    if (currentMoveIdx <= -1) return;
+
+    const targetIdx = currentMoveIdx - 1; // can be -1 (initial)
+
+    // Reverse the current move
+    reverseMoveTo3DCube(solutionMoves[currentMoveIdx], () => {
+        currentMoveIdx = targetIdx;
+        showMove(currentMoveIdx);
+    });
 }
 
+// Navigate to next move (single step)
 function nextMove() {
     pauseMoves();
-    if (currentMoveIdx < solutionMoves.length - 1) {
-        animateMove(currentMoveIdx + 1);
-    }
+    if (currentMoveIdx >= solutionMoves.length - 1) return; // Already at last
+
+    const targetIdx = currentMoveIdx + 1;
+    applyMoveTo3DCube(solutionMoves[targetIdx], () => {
+        currentMoveIdx = targetIdx;
+        showMove(currentMoveIdx);
+    });
 }
 
 function loadSolutionAnimation(solutionStr) {
@@ -326,21 +309,14 @@ function updateProgressBar(done, total) {
 }
 
 // Button event listeners
-const playBtn = document.getElementById('play-move-btn');
-if (playBtn) playBtn.onclick = playMoves;
-const pauseBtn = document.getElementById('pause-move-btn');
-if (pauseBtn) pauseBtn.onclick = pauseMoves;
+
 const prevBtn = document.getElementById('prev-move-btn');
 if (prevBtn) prevBtn.onclick = prevMove;
 const nextBtn = document.getElementById('next-move-btn');
 if (nextBtn) nextBtn.onclick = nextMove;
 const reloadBtn = document.getElementById('reload-move-btn');
 if (reloadBtn) reloadBtn.onclick = () => {
-    pauseMoves();
-    reset3DSolutionCube();
-    currentMoveIdx = -1;
-    showMove(-1);
-    updateProgressBar(0, solutionMoves.length);
+    window.location.reload();
 };
 
 // On page load, parse query params and initialize everything

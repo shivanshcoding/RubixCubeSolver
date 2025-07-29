@@ -106,6 +106,36 @@ function drawCube() {
     });
 }
 
+// Map face letter to color index
+const FACE_LETTER_TO_COLOR_IDX = {
+    'U': 0,
+    'R': 1,
+    'F': 2,
+    'D': 3,
+    'L': 4,
+    'B': 5
+};
+
+// Load cube state from a 54-character kociemba string
+function loadCubeString(str) {
+    if (!str || str.length !== 54) return false;
+    let idx = 0;
+    for (let f = 0; f < 6; f++) {
+        for (let r = 0; r < 3; r++) {
+            for (let c = 0; c < 3; c++) {
+                const ch = str[idx++];
+                const ci = FACE_LETTER_TO_COLOR_IDX[ch] ?? 0;
+                cubeState[f][r][c] = ci;
+            }
+        }
+    }
+    drawCube();
+    update3DCube?.();
+    updateCubeString();
+    return true;
+}
+window.loadCubeString = loadCubeString;
+
 function getKociembaCubeString() {
     let str = "";
     for (let face = 0; face < 6; face++) {
@@ -180,7 +210,7 @@ function submitCube() {
         .then(data => {
             if (data.success) {
                 // Redirect to solution page with cube string and solution as query params
-                const params = new URLSearchParams({ cube_str: cubeStr, solution: data.solution });
+                const params = new URLSearchParams({ cube_str: cubeStr, solution: data.solution, from: 'manual' });
                 window.location.href = `/solution?${params.toString()}`;
             } else {
                 // Show error on this page

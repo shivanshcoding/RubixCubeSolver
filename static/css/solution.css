@@ -1,355 +1,260 @@
-/* Solution Page Specific Styles */
+/* =========================================
+   Rubik's Cube Solution Page – Aesthetic Theme
+   Uses CSS variables from base-theme.css
+   ========================================= */
 
-/* Page Layout */
+/***************  Layout  ****************/
 body {
-  background: var(--bg-primary);
-  position: relative;
-  min-height: 100vh;
-  padding-top: 6rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 70px;
+    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+    font-family: "Montserrat", sans-serif;
+    overflow-x: hidden;
 }
 
-/* Solution Container */
+/***************  Containers  *************/
 .solution-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 2rem;
+    width: 1200px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 50px;
+    margin-bottom: 50px;
 }
 
+/***************  Header  *****************/
 .solution-header {
-  text-align: center;
-  margin-bottom: 3rem;
+    text-align: center;
 }
 
 .solution-title {
-  font-size: 2.5rem;
-  font-weight: 700;
-  margin-bottom: 1rem;
-  background: var(--gradient-success);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+    font-size: clamp(2rem, 4vw, 3rem);
+    font-weight: 800;
+    line-height: 1.2;
+    background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
 .solution-subtitle {
-  color: var(--text-secondary);
-  font-size: 1.1rem;
-  line-height: 1.6;
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+    margin-top: 0.5rem;
 }
 
-/* 3D Cube Viewer */
+/***************  Main Section  ***********/
+.solution-main {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 100px;
+}
+
+/* 3D Viewer wrapper */
 .cube-viewer-container {
-  background: var(--bg-card);
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--border-light);
-  border-radius: var(--border-radius-xl);
-  padding: 2rem;
-  margin-bottom: 2rem;
-  box-shadow: var(--shadow-lg);
-  position: relative;
-  overflow: hidden;
+    flex: 1 1 420px;
+    max-width: 500px;
+    background: #000000;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    padding: 4px;
+    position: relative;
+    overflow: hidden;
 }
 
 .cube-viewer-container::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: var(--gradient-success);
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.12), transparent 60%);
+    pointer-events: none;
 }
 
 .cube-viewer {
-  width: 100%;
-  height: 400px;
-  border-radius: var(--border-radius-lg);
-  background: var(--bg-secondary);
-  border: 2px solid var(--border-medium);
-  position: relative;
-  overflow: hidden;
+    width: 100%;
+    border-radius: 16px;
+    background: #000000; /* deep black for high contrast */
+    border: 2px solid var(--accent-primary); /* vivid border */
 }
 
-#cube-canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
+/* Step Guide */
+.solution-step-guide {
+    flex: 1 1 260px;
+    max-width: 640px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    padding: 2.5rem;
+    color: var(--text-primary);
+    backdrop-filter: blur(20px);
+    box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.4);
 }
 
-.cube-controls {
-  display: flex;
-  justify-content: center;
-  gap: 1.25rem;
-  margin-top: 1.5rem;
-  flex-wrap: wrap;
-}
-
-.cube-control-btn,
-.move-btn {
-  padding: 0.75rem 1.25rem;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 2px solid var(--border-medium);
-  border-radius: var(--border-radius-lg);
-  font-family: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition-normal);
-}
-
-.cube-control-btn:hover {
-  background: var(--accent-primary);
-  color: var(--text-inverse);
-  border-color: var(--accent-primary);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-
-/* Solution Steps */
-.solution-steps-container {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-  width: 100%;
-  max-width: 900px;
-  margin: 0 auto 2.5rem auto;
-}
-
-.solution-steps {
-  background: var(--bg-card);
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--border-light);
-  border-radius: var(--border-radius-xl);
-  padding: 2rem;
-  box-shadow: var(--shadow-md);
-}
-
-.solution-steps h3 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 1.5rem;
-  text-align: center;
-}
-
-.steps-list {
-  list-style: none;
-  counter-reset: step-counter;
-}
-
-.step-item {
-  counter-increment: step-counter;
-  display: flex;
-  align-items: center;
-  padding: 1rem;
-  margin-bottom: 0.75rem;
-  background: var(--bg-secondary);
-  border-radius: var(--border-radius-lg);
-  border: 1px solid var(--border-light);
-  transition: all var(--transition-normal);
-  cursor: pointer;
-}
-
-.step-item::before {
-  content: counter(step-counter);
-  width: 2rem;
-  height: 2rem;
-  background: var(--gradient-primary);
-  color: var(--text-inverse);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  margin-right: 1rem;
-  flex-shrink: 0;
-}
-
-.step-item:hover {
-  background: var(--accent-primary);
-  color: var(--text-inverse);
-  transform: translateX(5px);
-}
-
-.step-notation {
-  font-family: 'Courier New', monospace;
-  font-weight: 700;
-  font-size: 1.1rem;
-}
-
-/* Progress Panel */
-.progress-panel {
-  background: var(--bg-card);
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--border-light);
-  border-radius: var(--border-radius-xl);
-  padding: 1.5rem;
-  box-shadow: var(--shadow-md);
-  height: fit-content;
-}
-
-.progress-panel h4 {
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 1rem;
-  text-align: center;
-}
-
-.progress-info {
-  margin-bottom: 1rem;
-}
-
-.progress-label {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 0.5rem;
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-}
-
-.progress-bar {
-  width: 100%;
-  height: 8px;
-  background: var(--bg-tertiary);
-  border-radius: var(--border-radius-sm);
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: var(--gradient-success);
-  border-radius: var(--border-radius-sm);
-  transition: width var(--transition-normal);
-}
-
-/* Control Buttons */
-.solution-controls {
-  display: flex;
-  gap: 1rem;
-  justify-content: center;
-  margin-top: 1.5rem;
-  flex-wrap: wrap;
-}
-
-.control-btn {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: var(--border-radius-lg);
-  font-family: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition-normal);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.control-btn-play {
-  background: var(--gradient-success);
-  color: var(--text-inverse);
-}
-
-.control-btn-pause {
-  background: var(--gradient-warning);
-  color: var(--text-inverse);
-}
-
-.control-btn-reset {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 2px solid var(--border-medium);
-}
-
-.control-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-
-/* Enhanced Layout */
-.solution-main {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2.5rem;
-  margin-bottom: 3rem;
-}
-
-.current-move {
-  margin-bottom: 2rem;
+.solution-step-guide h3 {
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+    font-weight: 700;
 }
 
 .move-indicator {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--accent-primary);
-  margin-bottom: 0.5rem;
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(90deg, var(--gradient-success));
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
 .move-description {
-  color: var(--text-secondary);
-  line-height: 1.6;
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+
+/***************  Footer / Controls  ***********/
+.solution-footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.75rem;
+}
+
+.viewer-progress {
+    width: 100%;
+    max-width: 500px;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 10px;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+    transition: width 0.3s ease;
+}
+
+.progress-label {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    text-align: center;
 }
 
 .cube-controls {
-  margin-top: 1.75rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1rem;
 }
 
-.progress-panel {
-  position: sticky;
-  top: 6rem;
+.cube-control-btn {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(10px);
+    color: var(--text-primary);
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.25s ease;
 }
 
-/* Responsive Design */
-@media (max-width: 768px) {
-  body {
-    padding-top: 5rem;
-  }
-  
-  .solution-container {
-    padding: 0 1rem;
-  }
-  
-  .solution-title {
-    font-size: 2rem;
-  }
-  
-  .cube-viewer {
-    height: 300px;
-  }
-  
-  .solution-steps-container {
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-  }
-  
-  .progress-panel {
-    order: -1;
-  }
-  
-  .cube-controls,
-  .solution-controls {
-    flex-direction: column;
-    align-items: center;
-  }
-  
-  .cube-control-btn,
-  .control-btn {
-    width: 100%;
-    max-width: 200px;
-  }
+.cube-control-btn:hover {
+    transform: translateY(-3px);
+    background: var(--accent-primary);
+    color: var(--text-inverse);
+    box-shadow: 0 6px 16px -4px var(--accent-primary);
+    border-color: transparent;
 }
 
-@media (max-width: 480px) {
-  .solution-title {
-    font-size: 1.8rem;
-  }
-  
-  .cube-viewer {
-    height: 250px;
-  }
-  
-  .solution-steps,
-  .progress-panel {
-    padding: 1rem;
-  }
+/***************  Back Buttons  **************/
+.back-button-container {
+    position: fixed;
+    top: 1.5rem;
+    left: 1.5rem;
+    z-index: 1000;
+}
+
+.back-button {
+    padding: 0.5rem 1rem;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    color: var(--text-inverse);
+    font-weight: 500;
+    text-decoration: none;
+    transition: background 0.25s ease, transform 0.25s ease;
+}
+
+.back-button:hover {
+    background: var(--accent-primary);
+    transform: translateY(-2px);
+}
+
+.back-input-container {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    z-index: 1000;
+}
+
+.back-input-btn {
+    display: inline-block;
+    padding: 0.75rem 1.25rem;
+    background: var(--accent-secondary);
+    color: var(--text-inverse);
+    border-radius: 50px;
+    font-weight: 600;
+    text-decoration: none;
+    box-shadow: 0 12px 24px -10px var(--accent-secondary);
+    transition: transform 0.25s ease;
+}
+
+.back-input-btn:hover {
+    transform: translateY(-3px);
+}
+
+/***************  Preview Overrides */
+.cube-viewer,
+.cube-viewer-container,
+.move-preview {
+    background: #000000;
+    border: 2px solid var(--accent-primary);
+}
+
+/***************  Responsive  **************/
+@media(max-width:768px) {
+    body {
+        padding-top: 5rem;
+    }
+
+    .solution-container {
+        padding: 2rem 1rem;
+    }
+
+    .cube-viewer {
+        height: 320px;
+    }
+}
+
+@media(max-width:480px) {
+    .solution-container {
+        padding: 1.5rem 1rem;
+    }
+
+    .cube-viewer {
+        height: 260px;
+    }
 }

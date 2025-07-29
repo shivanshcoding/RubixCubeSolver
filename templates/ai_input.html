@@ -167,7 +167,9 @@
                     aiStatus.textContent = 'Cube detected successfully! Redirecting to solution...';
                     aiStatus.className = 'status valid';
                     setTimeout(() => {
-                        window.location.href = '/solution';
+                        // In real implementation, cubeStr would come from AI detection
+const cubeStr = localStorage.getItem('ai_detected_cube') || 'UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB';
+window.location.href = `/solution?cube_str=${cubeStr}&from=ai`;
                     }, 2000);
                 }, 3000);
             }
