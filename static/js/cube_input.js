@@ -201,6 +201,29 @@ function validateCube() {
 
 function submitCube() {
     const cubeStr = getKociembaCubeString();
+    
+    // Validate cube before submission
+    if (!cubeStr || cubeStr.length !== 54) {
+        alert('Please complete the cube input first.');
+        return;
+    }
+    
+    // Show loading screen if available (for manual input page)
+    if (typeof showLoadingScreen === 'function') {
+        showLoadingScreen();
+    } else {
+        // Fallback: show loading screen directly
+        const loadingScreen = document.getElementById('loading-screen');
+        if (loadingScreen) {
+            loadingScreen.style.display = 'flex';
+            animateManualLoading();
+        }
+    }
+    
+    // Track when loading started
+    const loadingStartTime = Date.now();
+    const minimumLoadingTime = 5000; // 5 seconds minimum
+    
     fetch('/solve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -208,15 +231,140 @@ function submitCube() {
     })
         .then(r => r.json())
         .then(data => {
-            if (data.success) {
-                // Redirect to solution page with cube string and solution as query params
-                const params = new URLSearchParams({ cube_str: cubeStr, solution: data.solution, from: 'manual' });
-                window.location.href = `/solution?${params.toString()}`;
-            } else {
-                // Show error on this page
-                alert('Error: ' + data.error);
-            }
+            // Calculate how long to wait before hiding loading screen
+            const loadingDuration = Date.now() - loadingStartTime;
+            const remainingTime = Math.max(0, minimumLoadingTime - loadingDuration);
+            
+            setTimeout(() => {
+                // Hide loading screen
+                if (typeof hideLoadingScreen === 'function') {
+                    hideLoadingScreen();
+                } else {
+                    const loadingScreen = document.getElementById('loading-screen');
+                    if (loadingScreen) loadingScreen.style.display = 'none';
+                }
+                
+                if (data.success) {
+                    // Show solution card if available, otherwise redirect
+                    if (typeof showSolutionCard === 'function') {
+                        showSolutionCard(data.solution, cubeStr);
+                    } else {
+                        // Fallback: redirect to solution page
+                        const params = new URLSearchParams({ cube_str: cubeStr, solution: data.solution, from: 'manual' });
+                        window.location.href = `/solution?${params.toString()}`;
+                    }
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            }, remainingTime);
+        })
+        .catch(error => {
+            // Calculate how long to wait before hiding loading screen
+            const loadingDuration = Date.now() - loadingStartTime;
+            const remainingTime = Math.max(0, minimumLoadingTime - loadingDuration);
+            
+            setTimeout(() => {
+                // Hide loading screen on error
+                if (typeof hideLoadingScreen === 'function') {
+                    hideLoadingScreen();
+                } else {
+                    const loadingScreen = document.getElementById('loading-screen');
+                    if (loadingScreen) loadingScreen.style.display = 'none';
+                }
+                console.error('Error:', error);
+                alert('Error solving cube. Please try again.');
+            }, remainingTime);
         });
+}
+
+// Fallback loading animation for manual input with strategic pauses
+function animateManualLoading() {
+    const messages = [
+        'Initializing AI algorithms...',
+        'Analyzing your cube configuration...',
+        'Processing color patterns and positions...',
+        'Finding the optimal solution path...',
+        'Calculating the most efficient moves...',
+        'Optimizing solution sequence...',
+        'Finalizing your personalized solution...',
+        'Almost there...'
+    ];
+    
+    // Define pause points for realistic loading behavior
+    const pausePoints = [20, 45, 65, 80, 95]; // Better distributed pauses
+    const pauseDurations = [600, 800, 700, 900, 1200]; // Optimized pause durations
+    
+    let progress = 0;
+    let messageIndex = 0;
+    let isPaused = false;
+    let currentPauseIndex = 0;
+    
+    // Reset progress bar to 0 at start
+    const loadingFill = document.getElementById('loading-fill');
+    const loadingPercentage = document.getElementById('loading-percentage');
+    const loadingMessage = document.getElementById('loading-message');
+    
+    if (loadingFill) loadingFill.style.width = '0%';
+    if (loadingPercentage) loadingPercentage.textContent = '0%';
+    if (loadingMessage) loadingMessage.textContent = messages[0];
+    
+    const interval = setInterval(() => {
+        // Check if we should pause at this progress point
+        if (!isPaused && currentPauseIndex < pausePoints.length && 
+            progress >= pausePoints[currentPauseIndex]) {
+            isPaused = true;
+            
+            // Add a subtle visual indication during pause
+            if (loadingMessage) {
+                loadingMessage.style.opacity = '0.7';
+                loadingMessage.textContent += ' (processing...)';
+            }
+            
+            setTimeout(() => {
+                isPaused = false;
+                currentPauseIndex++;
+                
+                // Restore message appearance after pause
+                if (loadingMessage) {
+                    loadingMessage.style.opacity = '0.9';
+                    loadingMessage.textContent = messages[messageIndex];
+                }
+            }, pauseDurations[currentPauseIndex] || 800);
+            
+            return; // Skip progress increment during pause
+        }
+        
+        // Skip progress increment if we're currently paused
+        if (isPaused) return;
+        
+        // Variable progress increments for more realistic feel
+        let increment;
+        if (progress < 20) increment = Math.random() * 3 + 2; // Fast start: 2-5%
+        else if (progress < 60) increment = Math.random() * 2 + 1; // Medium: 1-3%
+        else if (progress < 85) increment = Math.random() * 1.5 + 0.5; // Slow: 0.5-2%
+        else increment = Math.random() * 0.8 + 0.2; // Very slow finish: 0.2-1%
+        
+        progress += increment;
+        if (progress > 100) progress = 100;
+        
+        if (loadingFill) loadingFill.style.width = progress + '%';
+        if (loadingPercentage) loadingPercentage.textContent = Math.round(progress) + '%';
+        
+        // Change message based on progress with smoother transitions
+        const messageThreshold = (messageIndex + 1) * (100 / messages.length);
+        if (loadingMessage && messageIndex < messages.length - 1 && progress > messageThreshold) {
+            messageIndex++;
+            loadingMessage.style.opacity = '0.5';
+            setTimeout(() => {
+                loadingMessage.textContent = messages[messageIndex];
+                loadingMessage.style.opacity = '0.9';
+            }, 200);
+        }
+        
+        if (progress >= 100) {
+            clearInterval(interval);
+        }
+    }, 400); // Slightly faster base interval (400ms) to compensate for pauses
 }
 
 // Reset all stickers to first color (usually white) and fix centers properly

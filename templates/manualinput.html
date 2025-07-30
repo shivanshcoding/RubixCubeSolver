@@ -7,6 +7,7 @@
     <!-- Theme CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base-theme.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/manual-input.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/loading-screen.css') }}">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Three.js -->
@@ -74,6 +75,53 @@
             <div id="cube-3d-preview"></div>
         </div>
     </div>
+
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-overlay" style="display: none;">
+        <div class="loading-container">
+            <div class="loading-spinner"></div>
+            <h2 id="loading-title">Processing Your Cube...</h2>
+            <div class="loading-progress">
+                <div class="loading-bar">
+                    <div class="loading-fill" id="loading-fill"></div>
+                </div>
+                <span id="loading-percentage">0%</span>
+            </div>
+            <p id="loading-message">Analyzing your cube configuration...</p>
+            <div class="loading-video">
+                <video id="loading-video" autoplay muted loop>
+                    <source src="{{ url_for('static', filename='videos/cube-solving.mp4') }}" type="video/mp4">
+                </video>
+            </div>
+        </div>
+    </div>
+
+    <!-- Solution Card -->
+    <div id="solution-card" class="solution-overlay" style="display: none;">
+        <div class="solution-container">
+            <div class="solution-header">
+                <h2>🎉 Solution Found!</h2>
+                <button id="close-solution" class="close-btn">&times;</button>
+            </div>
+            <div class="solution-content">
+                <div class="solution-stats">
+                    <div class="stat-item">
+                        <span class="stat-number" id="move-count">20</span>
+                        <span class="stat-label">Moves</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number" id="input-method">Manual</span>
+                        <span class="stat-label">Method</span>
+                    </div>
+                </div>
+                <div class="solution-actions">
+                    <button id="view-solution-btn" class="btn btn-primary">View 3D Solution</button>
+                    <button id="try-again-btn" class="btn btn-secondary">Try Again</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="{{ url_for('static', filename='js/solver_anim.js') }}"></script>
     <script src="{{ url_for('static', filename='js/cube_input.js') }}"></script>
     <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
@@ -82,6 +130,120 @@
 
 <script>
 // Restore cube state from query param if provided
+        // Enhanced solve functionality with loading screen
+        function enhancedSolve() {
+            const cubeStr = window.getCubeString();
+            if (!cubeStr || cubeStr.length !== 54) {
+                alert('Please complete the cube input first.');
+                return;
+            }
+            
+            showLoadingScreen();
+            
+            fetch('/solve', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ cube_str: cubeStr })
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoadingScreen();
+                if (data.success) {
+                    // Wait 2 seconds before showing solution card
+                    setTimeout(() => {
+                        showSolutionCard(data.solution, cubeStr);
+                    }, 2000);
+                } else {
+                    alert('Error solving cube: ' + data.error);
+                }
+            })
+            .catch(error => {
+                hideLoadingScreen();
+                console.error('Error:', error);
+                alert('Error solving cube. Please try again.');
+            });
+        }
+        
+        // Loading screen functionality
+        function showLoadingScreen() {
+            document.getElementById('loading-screen').style.display = 'flex';
+            animateLoading();
+        }
+        
+        function hideLoadingScreen() {
+            document.getElementById('loading-screen').style.display = 'none';
+        }
+        
+        function animateLoading() {
+            const messages = [
+                'Analyzing your cube configuration...',
+                'Finding the best solution for you...',
+                'Sit back and let us find an answer...',
+                'Processing color patterns...',
+                'Calculating optimal moves...',
+                'Almost there...'
+            ];
+            
+            let progress = 0;
+            let messageIndex = 0;
+            
+            const interval = setInterval(() => {
+                progress += Math.random() * 15 + 5;
+                if (progress > 100) progress = 100;
+                
+                document.getElementById('loading-fill').style.width = progress + '%';
+                document.getElementById('loading-percentage').textContent = Math.round(progress) + '%';
+                
+                if (messageIndex < messages.length - 1 && progress > (messageIndex + 1) * 16) {
+                    messageIndex++;
+                    document.getElementById('loading-message').textContent = messages[messageIndex];
+                }
+                
+                if (progress >= 100) {
+                    clearInterval(interval);
+                }
+            }, 200);
+        }
+        
+        function showSolutionCard(solution, cubeStr) {
+            const moveCount = solution.split(' ').length;
+            document.getElementById('move-count').textContent = moveCount;
+            document.getElementById('solution-card').style.display = 'flex';
+            
+            // Store solution for 3D viewer
+            localStorage.setItem('cube_solution', solution);
+            localStorage.setItem('cube_string', cubeStr);
+        }
+        
+        // Solution card event listeners
+        document.getElementById('close-solution').addEventListener('click', function() {
+            document.getElementById('solution-card').style.display = 'none';
+        });
+        
+        document.getElementById('view-solution-btn').addEventListener('click', function() {
+            const cubeStr = localStorage.getItem('cube_string');
+            const solution = localStorage.getItem('cube_solution');
+            window.location.href = `/solution?cube_str=${cubeStr}&solution=${encodeURIComponent(solution)}&from=manual`;
+        });
+        
+        document.getElementById('try-again-btn').addEventListener('click', function() {
+            document.getElementById('solution-card').style.display = 'none';
+            // Reset the cube input
+            if (window.resetCube) {
+                window.resetCube();
+            }
+        });
+        
+        // Override the original solve function
+        window.enhancedSolve = enhancedSolve;
+        window.showLoadingScreen = showLoadingScreen;
+        window.hideLoadingScreen = hideLoadingScreen;
+        window.showSolutionCard = showSolutionCard;
+        
+
+        
 window.addEventListener('DOMContentLoaded', () => {
     const url = new URL(window.location.href);
     const cubeStr = url.searchParams.get('cube_str');

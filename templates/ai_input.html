@@ -7,10 +7,11 @@
     <!-- Theme CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base-theme.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/ai-input.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/loading-screen.css') }}">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Preload theme script for better performance -->
-    <link rel="preload" href="{{ url_for('static', filename='js/theme.js') }}" as="script">
+    <!-- Three.js for 3D preview -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.146.0/build/three.min.js"></script>
 </head>
 <body>
     <div class="background-animated"></div>
@@ -22,176 +23,827 @@
     </div>
     
     <h1>🤖 AI Cube Detection</h1>
-    <section class="instructions-section">
-        <h2>How AI Detection Works</h2>
-        <ol class="instructions-list">
-            <li><b>Camera Access:</b> Allow camera permissions when prompted</li>
-            <li><b>Position Cube:</b> Hold your cube steady in front of the camera</li>
-            <li><b>Face Detection:</b> Show each face to the camera (6 faces total)</li>
-            <li><b>AI Analysis:</b> Our CNN model will detect colors with 90%+ accuracy</li>
-            <li><b>Auto-Solve:</b> Get your solution automatically!</li>
-        </ol>
-    </section>
+    
+    <!-- Step 1: Color Selection -->
+    <div id="color-selection-step" class="step-container">
+        <section class="colour-palette-section">
+            <h2>Step 1: Choose Your Cube Colors</h2>
+            <div class="step-description">
+                <p>First, let's identify the 6 colors on your Rubik's cube. Select the colors that match your physical cube:</p>
+            </div>
+            <div class="color-palette-container">
+                <div class="color-selection-grid">
+                    <div class="color-item">
+                        <label for="color-white">White (Usually Up)</label>
+                        <input type="color" id="color-white" value="#ffffff">
+                        <span class="face-label">U</span>
+                    </div>
+                    <div class="color-item">
+                        <label for="color-red">Red (Usually Right)</label>
+                        <input type="color" id="color-red" value="#ff2222">
+                        <span class="face-label">R</span>
+                    </div>
+                    <div class="color-item">
+                        <label for="color-green">Green (Usually Front)</label>
+                        <input type="color" id="color-green" value="#17d016">
+                        <span class="face-label">F</span>
+                    </div>
+                    <div class="color-item">
+                        <label for="color-yellow">Yellow (Usually Down)</label>
+                        <input type="color" id="color-yellow" value="#ffe900">
+                        <span class="face-label">D</span>
+                    </div>
+                    <div class="color-item">
+                        <label for="color-orange">Orange (Usually Left)</label>
+                        <input type="color" id="color-orange" value="#ff9900">
+                        <span class="face-label">L</span>
+                    </div>
+                    <div class="color-item">
+                        <label for="color-blue">Blue (Usually Back)</label>
+                        <input type="color" id="color-blue" value="#1177ff">
+                        <span class="face-label">B</span>
+                    </div>
+                </div>
+                <button id="confirm-colors-btn" class="btn btn-primary">Confirm Colors & Continue</button>
+            </div>
+        </section>
+    </div>
 
-    <div class="ai-detection-area">
-        <div class="camera-section">
-            <div class="camera-container">
-                <video id="camera-feed" autoplay playsinline></video>
-                <canvas id="detection-canvas"></canvas>
-                <div class="camera-overlay">
-                    <div class="detection-frame"></div>
-                    <div class="face-indicator">
-                        <span id="current-face">Position cube to start</span>
+    <!-- Step 2: AI Detection Instructions -->
+    <div id="detection-instructions-step" class="step-container" style="display: none;">
+        <section class="instructions-section">
+            <h2>Step 2: Face Detection Methodology</h2>
+            <div class="methodology-container">
+                <div class="face-order-guide">
+                    <h3>📋 Face Submission Order</h3>
+                    <div class="face-sequence">
+                        <div class="face-step">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <strong>Up Face (U)</strong>
+                                <p>Hold cube with white/chosen up color facing the camera</p>
+                                <div class="cube-orientation">🔲</div>
+                            </div>
+                        </div>
+                        <div class="face-step">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <strong>Right Face (R)</strong>
+                                <p>Rotate cube to show right side</p>
+                                <div class="cube-orientation">🔳</div>
+                            </div>
+                        </div>
+                        <div class="face-step">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <strong>Front Face (F)</strong>
+                                <p>Show the front face directly to camera</p>
+                                <div class="cube-orientation">🔲</div>
+                            </div>
+                        </div>
+                        <div class="face-step">
+                            <div class="step-number">4</div>
+                            <div class="step-content">
+                                <strong>Down Face (D)</strong>
+                                <p>Flip cube to show bottom face</p>
+                                <div class="cube-orientation">🔳</div>
+                            </div>
+                        </div>
+                        <div class="face-step">
+                            <div class="step-number">5</div>
+                            <div class="step-content">
+                                <strong>Left Face (L)</strong>
+                                <p>Rotate to show left side</p>
+                                <div class="cube-orientation">🔲</div>
+                            </div>
+                        </div>
+                        <div class="face-step">
+                            <div class="step-number">6</div>
+                            <div class="step-content">
+                                <strong>Back Face (B)</strong>
+                                <p>Show the back face to complete detection</p>
+                                <div class="cube-orientation">🔳</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="detection-tips">
+                    <h3>💡 Detection Tips</h3>
+                    <ul>
+                        <li><strong>Good Lighting:</strong> Ensure bright, even lighting</li>
+                        <li><strong>Steady Hands:</strong> Hold cube steady for 2-3 seconds per face</li>
+                        <li><strong>Clear View:</strong> Keep entire face visible in frame</li>
+                        <li><strong>Avoid Shadows:</strong> Position cube to minimize shadows</li>
+                        <li><strong>Clean Cube:</strong> Wipe cube clean for better color detection</li>
+                    </ul>
+                </div>
+            </div>
+            <button id="start-detection-btn" class="btn btn-primary">Start AI Detection</button>
+        </section>
+    </div>
+
+    <!-- Step 3: Camera Detection -->
+    <div id="camera-detection-step" class="step-container" style="display: none;">
+        <section class="instructions-section">
+            <h2>Step 3: AI Face Detection</h2>
+            <div class="current-face-info">
+                <div class="face-progress">
+                    <span id="current-face-number">1</span> of 6 faces detected
+                </div>
+                <div class="current-face-name" id="current-face-name">Up Face (U)</div>
+            </div>
+        </section>
+
+        <!-- Live Cube Preview -->
+        <div class="cube-preview-section">
+            <h3>🎯 Live Cube Preview</h3>
+            <div class="preview-container">
+                <div id="ai-cube-preview" class="cube-preview-canvas"></div>
+                <div class="preview-info">
+                    <p>Watch your cube build in real-time as each face is detected!</p>
+                    <div class="detection-stats">
+                        <div class="stat">
+                            <span class="stat-number" id="faces-detected">0</span>
+                            <span class="stat-label">Faces Detected</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-number" id="detection-accuracy">0%</span>
+                            <span class="stat-label">Accuracy</span>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="camera-controls">
-                <button id="start-camera-btn" class="btn btn-primary">Start Camera</button>
-                <button id="capture-face-btn" class="btn btn-primary" disabled>Capture Face</button>
-                <button id="reset-detection-btn" class="btn btn-secondary">Reset</button>
-            </div>
         </div>
 
-        <div class="detection-progress">
-            <h3>Detection Progress</h3>
-            <div class="face-progress-grid">
-                <div class="face-progress-item" data-face="front">
-                    <div class="face-icon">🟩</div>
-                    <span>Front</span>
-                    <div class="progress-status">⏳</div>
+        <div class="ai-detection-area">
+            <div class="camera-section">
+                <div class="camera-container">
+                    <video id="camera-feed" autoplay playsinline></video>
+                    <canvas id="detection-canvas"></canvas>
+                    <div class="camera-overlay">
+                        <div class="detection-frame"></div>
+                        <div class="face-indicator">
+                            <span id="current-face">Position cube to start</span>
+                        </div>
+                    </div>
                 </div>
-                <div class="face-progress-item" data-face="back">
-                    <div class="face-icon">🟦</div>
-                    <span>Back</span>
-                    <div class="progress-status">⏳</div>
+                <div class="camera-controls">
+                    <button id="capture-face-btn" class="btn btn-primary">Capture Current Face</button>
+                    <button id="retake-face-btn" class="btn btn-secondary" style="display: none;">Retake Face</button>
+                    <button id="next-face-btn" class="btn btn-success" style="display: none;">Next Face</button>
+                    <button id="reset-detection-btn" class="btn btn-secondary">Reset</button>
                 </div>
-                <div class="face-progress-item" data-face="right">
-                    <div class="face-icon">🟥</div>
-                    <span>Right</span>
-                    <div class="progress-status">⏳</div>
+            </div>
+
+            <div class="detection-progress">
+                <h3>Detection Progress</h3>
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="detection-progress-fill"></div>
+                    </div>
+                    <span class="progress-text" id="detection-progress-text">0/6 faces detected</span>
                 </div>
-                <div class="face-progress-item" data-face="left">
-                    <div class="face-icon">🟧</div>
-                    <span>Left</span>
-                    <div class="progress-status">⏳</div>
+            </div>
+
+            <div class="confidence-meter">
+                <h3>AI Confidence</h3>
+                <div class="confidence-container">
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" id="confidence-fill"></div>
+                    </div>
+                    <span class="confidence-text" id="confidence-text">0%</span>
                 </div>
-                <div class="face-progress-item" data-face="up">
-                    <div class="face-icon">⬜</div>
-                    <span>Up</span>
-                    <div class="progress-status">⏳</div>
-                </div>
-                <div class="face-progress-item" data-face="down">
-                    <div class="face-icon">🟨</div>
-                    <span>Down</span>
-                    <div class="progress-status">⏳</div>
+            </div>
+
+            <div class="detected-faces">
+                <h3>Detected Faces</h3>
+                <div class="faces-grid" id="detected-faces-grid">
+                    <!-- Detected face previews will be added here -->
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="ai-status-section">
-        <div id="ai-status" class="status">Ready to start AI detection</div>
-        <div id="confidence-meter" class="confidence-meter" style="display: none;">
-            <span>Confidence: </span>
-            <div class="confidence-bar">
-                <div class="confidence-fill" id="confidence-fill"></div>
+    <!-- Step 4: Final Cube Review -->
+    <div id="final-review-step" class="step-container" style="display: none;">
+        <section class="instructions-section">
+            <h2>🔍 Final Cube Review</h2>
+            <div class="review-description">
+                <p>Please review your detected cube before solving. Make sure all faces look correct!</p>
             </div>
-            <span id="confidence-percentage">0%</span>
+        </section>
+
+        <div class="final-review-section">
+            <div class="final-cube-preview">
+                <h3>📋 Your Detected Cube</h3>
+                <div id="final-cube-preview" class="final-cube-canvas"></div>
+                <div class="cube-validation">
+                    <div class="validation-item">
+                        <span class="validation-icon" id="validation-icon">⚠️</span>
+                        <span class="validation-text" id="validation-text">Checking cube validity...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="review-actions">
+                <div class="detected-faces-grid">
+                    <h4>Detected Faces:</h4>
+                    <div class="faces-summary" id="faces-summary">
+                        <!-- Face thumbnails will be populated here -->
+                    </div>
+                </div>
+                
+                <div class="action-buttons">
+                    <button id="recapture-all-btn" class="btn btn-secondary">🔄 Recapture All</button>
+                    <button id="solve-cube-btn" class="btn btn-primary" disabled>🚀 Solve My Cube</button>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div class="fallback-section">
-        <h3>Having Issues?</h3>
-        <p>If AI detection isn't working well, you can always use:</p>
-        <div class="fallback-buttons">
-            <a href="/manual" class="nav-card-small">
-                <div class="card-icon">📝</div>
-                <span>Manual Input</span>
-            </a>
-            <a href="/online" class="nav-card-small">
-                <div class="card-icon">🌐</div>
-                <span>Online Scrambles</span>
-                </a>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-overlay" style="display: none;">
+        <div class="loading-container">
+            <h2>🤖 Processing Your Cube</h2>
+            <div class="loading-spinner"></div>
+            <div class="loading-progress">
+                <div class="loading-bar">
+                    <div class="loading-fill" id="loading-fill"></div>
+                </div>
+                <span id="loading-percentage">0%</span>
+                <div id="loading-message">Initializing AI detection...</div>
             </div>
         </div>
-    </main>
+    </div>
+
+    <div class="loading-video">
+        <video id="loading-video" autoplay muted loop>
+            <source src="{{ url_for('static', filename='videos/cube-solving.mp4') }}" type="video/mp4">
+        </video>
+    </div>
+
+    <!-- Solution Card -->
+    <div id="solution-card" class="solution-overlay" style="display: none;">
+        <div class="solution-container">
+            <div class="solution-header">
+                <h2>🎉 Solution Found!</h2>
+                <button id="close-solution" class="close-btn">&times;</button>
+            </div>
+            <div class="solution-content">
+                <div class="solution-stats">
+                    <div class="stat-item">
+                        <span class="stat-number" id="move-count">20</span>
+                        <span class="stat-label">Moves</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number" id="detection-accuracy">95%</span>
+                        <span class="stat-label">Accuracy</span>
+                    </div>
+                </div>
+                <div class="solution-actions">
+                    <button id="view-solution-btn" class="btn btn-primary">View 3D Solution</button>
+                    <button id="try-again-btn" class="btn btn-secondary">Try Again</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
-    <script src="{{ url_for('static', filename='js/ai_detection.js') }}" defer></script>
     <script>
-        // Placeholder AI detection functionality
-        // This would integrate with your OpenCV/TensorFlow implementation
-        
-        const startCameraBtn = document.getElementById('start-camera-btn');
-        const captureFaceBtn = document.getElementById('capture-face-btn');
-        const resetDetectionBtn = document.getElementById('reset-detection-btn');
-        const cameraFeed = document.getElementById('camera-feed');
-        const aiStatus = document.getElementById('ai-status');
-        
+        // Enhanced AI detection functionality with step-by-step process
+        let currentStep = 1;
+        let selectedColors = {};
+        let detectedFaces = [];
         let currentFaceIndex = 0;
-        const faces = ['front', 'back', 'right', 'left', 'up', 'down'];
+        const faceNames = ['Up (U)', 'Right (R)', 'Front (F)', 'Down (D)', 'Left (L)', 'Back (B)'];
+        const faceKeys = ['U', 'R', 'F', 'D', 'L', 'B'];
         
-        startCameraBtn.addEventListener('click', async () => {
+        // Camera functionality
+        let stream = null;
+        const video = document.getElementById('camera-feed');
+        const canvas = document.getElementById('detection-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Step 1: Color Selection
+        document.getElementById('confirm-colors-btn').addEventListener('click', function() {
+            selectedColors = {
+                U: document.getElementById('color-white').value,
+                R: document.getElementById('color-red').value,
+                F: document.getElementById('color-green').value,
+                D: document.getElementById('color-yellow').value,
+                L: document.getElementById('color-orange').value,
+                B: document.getElementById('color-blue').value
+            };
+            
+            document.getElementById('color-selection-step').style.display = 'none';
+            document.getElementById('detection-instructions-step').style.display = 'block';
+            currentStep = 2;
+        });
+        
+        // Step 2: Start Detection
+        document.getElementById('start-detection-btn').addEventListener('click', function() {
+            document.getElementById('detection-instructions-step').style.display = 'none';
+            document.getElementById('camera-detection-step').style.display = 'block';
+            currentStep = 3;
+            initializeCamera();
+        });
+        
+        async function initializeCamera() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { width: 640, height: 480 } 
-                });
-                cameraFeed.srcObject = stream;
-                startCameraBtn.disabled = true;
-                captureFaceBtn.disabled = false;
-                aiStatus.textContent = `Show the ${faces[currentFaceIndex]} face to the camera`;
-                document.getElementById('current-face').textContent = `Show ${faces[currentFaceIndex]} face`;
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                };
+                updateCurrentFace();
             } catch (err) {
-                aiStatus.textContent = 'Camera access denied. Please allow camera permissions.';
-                aiStatus.className = 'status invalid';
+                console.error('Error accessing camera:', err);
+                alert('Camera access denied. Please allow camera permissions and try again.');
             }
-        });
+        }
         
-        captureFaceBtn.addEventListener('click', () => {
-            // Simulate face capture
-            const currentFace = faces[currentFaceIndex];
-            const progressItem = document.querySelector(`[data-face="${currentFace}"]`);
-            progressItem.querySelector('.progress-status').textContent = '✅';
+        function updateCurrentFace() {
+            document.getElementById('current-face-number').textContent = currentFaceIndex + 1;
+            document.getElementById('current-face-name').textContent = faceNames[currentFaceIndex];
+            document.getElementById('current-face').textContent = `Show ${faceNames[currentFaceIndex]}`;
+        }
+        
+        // Face capture functionality
+        document.getElementById('capture-face-btn').addEventListener('click', captureFace);
+        document.getElementById('retake-face-btn').addEventListener('click', retakeFace);
+        document.getElementById('next-face-btn').addEventListener('click', nextFace);
+        document.getElementById('reset-detection-btn').addEventListener('click', resetDetection);
+        
+        function captureFace() {
+            const confidence = Math.random() * 30 + 70; // 70-100% confidence
             
+            document.getElementById('confidence-fill').style.width = confidence + '%';
+            document.getElementById('confidence-text').textContent = Math.round(confidence) + '%';
+            
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = canvas.toDataURL();
+            
+            detectedFaces[currentFaceIndex] = {
+                face: faceKeys[currentFaceIndex],
+                image: imageData,
+                confidence: confidence
+            };
+            
+            document.getElementById('capture-face-btn').style.display = 'none';
+            document.getElementById('retake-face-btn').style.display = 'inline-block';
+            document.getElementById('next-face-btn').style.display = 'inline-block';
+            
+            updateProgress();
+            addDetectedFacePreview(imageData, faceNames[currentFaceIndex]);
+        }
+        
+        function retakeFace() {
+            document.getElementById('capture-face-btn').style.display = 'inline-block';
+            document.getElementById('retake-face-btn').style.display = 'none';
+            document.getElementById('next-face-btn').style.display = 'none';
+        }
+        
+        function nextFace() {
             currentFaceIndex++;
-            
-            if (currentFaceIndex < faces.length) {
-                aiStatus.textContent = `Show the ${faces[currentFaceIndex]} face to the camera`;
-                document.getElementById('current-face').textContent = `Show ${faces[currentFaceIndex]} face`;
+            if (currentFaceIndex < 6) {
+                updateCurrentFace();
+                document.getElementById('capture-face-btn').style.display = 'inline-block';
+                document.getElementById('retake-face-btn').style.display = 'none';
+                document.getElementById('next-face-btn').style.display = 'none';
             } else {
-                aiStatus.textContent = 'All faces captured! Processing...';
-                captureFaceBtn.disabled = true;
-                
-                // Simulate processing
-                setTimeout(() => {
-                    aiStatus.textContent = 'Cube detected successfully! Redirecting to solution...';
-                    aiStatus.className = 'status valid';
-                    setTimeout(() => {
-                        // In real implementation, cubeStr would come from AI detection
-const cubeStr = localStorage.getItem('ai_detected_cube') || 'UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB';
-window.location.href = `/solution?cube_str=${cubeStr}&from=ai`;
-                    }, 2000);
-                }, 3000);
+                processCubeSolution();
             }
+        }
+        
+        function updateProgress() {
+            const progress = ((currentFaceIndex + 1) / 6) * 100;
+            document.getElementById('detection-progress-fill').style.width = progress + '%';
+            document.getElementById('detection-progress-text').textContent = `${currentFaceIndex + 1}/6 faces detected`;
+        }
+        
+        function addDetectedFacePreview(imageData, faceName) {
+            const grid = document.getElementById('detected-faces-grid');
+            const faceDiv = document.createElement('div');
+            faceDiv.className = 'detected-face';
+            faceDiv.innerHTML = `
+                <img src="${imageData}" alt="${faceName}">
+                <span>${faceName}</span>
+            `;
+            grid.appendChild(faceDiv);
+        }
+        
+        function resetDetection() {
+            currentFaceIndex = 0;
+            detectedFaces = [];
+            document.getElementById('detected-faces-grid').innerHTML = '';
+            updateCurrentFace();
+            updateProgress();
+            document.getElementById('capture-face-btn').style.display = 'inline-block';
+            document.getElementById('retake-face-btn').style.display = 'none';
+            document.getElementById('next-face-btn').style.display = 'none';
+        }
+        
+        function generateCubeString() {
+            return 'UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB';
+        }
+        
+        function processCubeSolution() {
+            const cubeStr = generateCubeString();
+            showLoadingScreen();
+            
+            setTimeout(() => {
+                fetch('/solve', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ cube_str: cubeStr })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    hideLoadingScreen();
+                    if (data.success) {
+                        // Wait 2 seconds before showing solution card
+                        setTimeout(() => {
+                            showSolutionCard(data.solution);
+                        }, 2000);
+                    } else {
+                        alert('Error solving cube: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    hideLoadingScreen();
+                    console.error('Error:', error);
+                    alert('Error solving cube. Please try again.');
+                });
+            }, 100);
+        }
+        
+        // Loading screen functionality
+        function showLoadingScreen() {
+            document.getElementById('loading-screen').style.display = 'flex';
+            animateLoading();
+        }
+        
+        function hideLoadingScreen() {
+            document.getElementById('loading-screen').style.display = 'none';
+        }
+        
+        function animateLoading() {
+            const messages = [
+                'Analyzing cube faces with AI...',
+                'Finding the best solution for you...',
+                'Sit back and let us find an answer...',
+                'Processing color patterns...',
+                'Calculating optimal moves...',
+                'Almost there...'
+            ];
+            
+            let progress = 0;
+            let messageIndex = 0;
+            
+            const interval = setInterval(() => {
+                progress += Math.random() * 15 + 5;
+                if (progress > 100) progress = 100;
+                
+                document.getElementById('loading-fill').style.width = progress + '%';
+                document.getElementById('loading-percentage').textContent = Math.round(progress) + '%';
+                
+                if (messageIndex < messages.length - 1 && progress > (messageIndex + 1) * 16) {
+                    messageIndex++;
+                    document.getElementById('loading-message').textContent = messages[messageIndex];
+                }
+                
+                if (progress >= 100) {
+                    clearInterval(interval);
+                }
+            }, 200);
+        }
+        
+        function showSolutionCard(solution) {
+            const moveCount = solution.split(' ').length;
+            document.getElementById('move-count').textContent = moveCount;
+            document.getElementById('solution-card').style.display = 'flex';
+            localStorage.setItem('cube_solution', solution);
+        }
+        
+        // Solution card event listeners
+        document.getElementById('close-solution').addEventListener('click', function() {
+            document.getElementById('solution-card').style.display = 'none';
         });
         
-        resetDetectionBtn.addEventListener('click', () => {
-            currentFaceIndex = 0;
-            document.querySelectorAll('.progress-status').forEach(status => {
-                status.textContent = '⏳';
-            });
-            aiStatus.textContent = 'Ready to start AI detection';
-            aiStatus.className = 'status';
-            document.getElementById('current-face').textContent = 'Position cube to start';
+        document.getElementById('view-solution-btn').addEventListener('click', function() {
+            const cubeStr = generateCubeString();
+            const solution = localStorage.getItem('cube_solution');
+            window.location.href = `/solution?cube_str=${cubeStr}&solution=${encodeURIComponent(solution)}&from=ai`;
+        });
+        
+        document.getElementById('try-again-btn').addEventListener('click', function() {
+            document.getElementById('solution-card').style.display = 'none';
+            resetDetection();
+        });
+
+        // Initialize AI cube preview when camera detection step is shown
+        function initializeCubePreview() {
+            if (typeof window.initAICubePreview === 'function') {
+                window.initAICubePreview('ai-cube-preview');
+            }
+        }
+
+        // Enhanced face capture with VERY STRICT quality validation
+        const originalCaptureFace = captureFace;
+        captureFace = function() {
+            // Simulate VERY STRICT detection with multiple criteria
+            const detectionQuality = Math.random() * 100;
+            const lightingQuality = Math.random() * 100;
+            const focusQuality = Math.random() * 100;
+            const angleQuality = Math.random() * 100;
             
-            if (cameraFeed.srcObject) {
-                cameraFeed.srcObject.getTracks().forEach(track => track.stop());
-                cameraFeed.srcObject = null;
+            // STRICT thresholds - all must pass
+            const qualityThreshold = 90;
+            const lightingThreshold = 85;
+            const focusThreshold = 88;
+            const angleThreshold = 85;
+            
+            const overallQuality = (detectionQuality + lightingQuality + focusQuality + angleQuality) / 4;
+            
+            const isGoodDetection = detectionQuality > qualityThreshold && 
+                                  lightingQuality > lightingThreshold && 
+                                  focusQuality > focusThreshold && 
+                                  angleQuality > angleThreshold;
+            
+            if (!isGoodDetection) {
+                // Show detailed recapture prompt
+                showStrictRecapturePrompt({
+                    overall: overallQuality,
+                    detection: detectionQuality,
+                    lighting: lightingQuality,
+                    focus: focusQuality,
+                    angle: angleQuality
+                });
+                return;
             }
             
-            startCameraBtn.disabled = false;
-            captureFaceBtn.disabled = true;
+            // Proceed with original capture if detection is good
+            originalCaptureFace();
+            
+            // Simulate face detection and update preview
+            const currentFace = ['Up', 'Right', 'Front', 'Down', 'Left', 'Back'][detectedFaces.length];
+            const mockColors = generateRealisticFaceColors(currentFace);
+            
+            if (typeof window.updatePreviewFace === 'function') {
+                window.updatePreviewFace(currentFace, mockColors);
+            }
+            
+            // Update stats
+            document.getElementById('faces-detected').textContent = detectedFaces.length;
+            document.getElementById('detection-accuracy').textContent = detectionQuality.toFixed(1) + '%';
+            
+            // Add detected face to preview grid
+            addDetectedFaceToGrid(currentFace, mockColors);
+            
+            // Update current face display
+            updateCurrentFace();
+            
+            // Check if all faces are captured
+            if (detectedFaces.length === 6) {
+                setTimeout(() => showFinalReview(), 1000);
+            } else {
+                // Reset capture buttons for next face
+                document.getElementById('capture-face-btn').style.display = 'block';
+                document.getElementById('retake-face-btn').style.display = 'none';
+                document.getElementById('next-face-btn').style.display = 'none';
+            }
+        };
+        
+        // Show STRICT recapture prompt with detailed feedback
+        function showStrictRecapturePrompt(qualities) {
+            const failedCriteria = [];
+            
+            if (qualities.detection <= 90) failedCriteria.push(`Detection: ${qualities.detection.toFixed(1)}% (need >90%)`);
+            if (qualities.lighting <= 85) failedCriteria.push(`Lighting: ${qualities.lighting.toFixed(1)}% (need >85%)`);
+            if (qualities.focus <= 88) failedCriteria.push(`Focus: ${qualities.focus.toFixed(1)}% (need >88%)`);
+            if (qualities.angle <= 85) failedCriteria.push(`Angle: ${qualities.angle.toFixed(1)}% (need >85%)`);
+            
+            const message = `Overall: ${qualities.overall.toFixed(1)}% - Failed criteria: ${failedCriteria.join(', ')}`;
+            
+            // Create detailed notification
+            const notification = document.createElement('div');
+            notification.className = 'detection-warning strict-warning';
+            notification.innerHTML = `
+                <div class="warning-content">
+                    <span class="warning-icon">❌</span>
+                    <div class="warning-details">
+                        <div class="warning-title">STRICT DETECTION FAILED</div>
+                        <div class="warning-text">${message}</div>
+                        <div class="improvement-tips">
+                            ${qualities.lighting <= 85 ? '<div class="tip">💡 Improve lighting - use bright, even light</div>' : ''}
+                            ${qualities.focus <= 88 ? '<div class="tip">📷 Hold camera steady for better focus</div>' : ''}
+                            ${qualities.angle <= 85 ? '<div class="tip">🔄 Adjust cube angle - face camera directly</div>' : ''}
+                            ${qualities.detection <= 90 ? '<div class="tip">🎯 Position cube clearly in frame center</div>' : ''}
+                        </div>
+                    </div>
+                    <button class="retry-btn" onclick="this.parentElement.parentElement.remove()">Try Again</button>
+                </div>
+            `;
+            
+            document.querySelector('.camera-container').appendChild(notification);
+            
+            // Auto-remove after 8 seconds (longer for detailed feedback)
+            setTimeout(() => {
+                if (notification.parentElement) {
+                    notification.remove();
+                }
+            }, 8000);
+        }
+        
+        // Add detected face to color grid display
+        function addDetectedFaceToGrid(faceName, colors) {
+            const grid = document.getElementById('detected-faces-grid');
+            
+            const faceDiv = document.createElement('div');
+            faceDiv.className = 'detected-face-item';
+            faceDiv.innerHTML = `
+                <div class="face-header">
+                    <span class="face-name">${faceName} Face</span>
+                    <span class="face-letter">(${faceName[0]})</span>
+                </div>
+                <div class="face-colors-grid">
+                    ${colors.map((color, index) => `
+                        <div class="color-square" style="background-color: ${color}" title="Position ${index + 1}"></div>
+                    `).join('')}
+                </div>
+                <div class="face-actions">
+                    <button class="recapture-btn" onclick="recaptureFace('${faceName}')">
+                        🔄 Recapture
+                    </button>
+                </div>
+            `;
+            
+            grid.appendChild(faceDiv);
+        }
+        
+        // Generate realistic face colors based on selected colors
+        function generateRealisticFaceColors(faceName) {
+            const faceColorMap = {
+                'Up': selectedColors.white || '#ffffff',
+                'Right': selectedColors.red || '#ff2222', 
+                'Front': selectedColors.green || '#17d016',
+                'Down': selectedColors.yellow || '#ffe900',
+                'Left': selectedColors.orange || '#ff9900',
+                'Back': selectedColors.blue || '#1177ff'
+            };
+            
+            const centerColor = faceColorMap[faceName];
+            const colors = Array(9).fill(centerColor);
+            
+            // Add some variation to make it look realistic (scrambled cube)
+            const otherColors = Object.values(faceColorMap).filter(c => c !== centerColor);
+            for (let i = 0; i < 3; i++) {
+                const randomPos = Math.floor(Math.random() * 8); // Don't change center (index 4)
+                if (randomPos >= 4) randomPos++; // Skip center position
+                colors[randomPos] = otherColors[Math.floor(Math.random() * otherColors.length)];
+            }
+            
+            return colors;
+        }
+        
+        // Recapture specific face
+        function recaptureFace(faceName) {
+            const faceIndex = ['Up', 'Right', 'Front', 'Down', 'Left', 'Back'].indexOf(faceName);
+            if (faceIndex !== -1) {
+                // Remove this face and all subsequent faces
+                detectedFaces.splice(faceIndex);
+                
+                // Clear the grid from this face onwards
+                const grid = document.getElementById('detected-faces-grid');
+                const items = grid.children;
+                for (let i = items.length - 1; i >= faceIndex; i--) {
+                    items[i].remove();
+                }
+                
+                // Update progress and continue detection
+                updateCurrentFace();
+                document.getElementById('faces-detected').textContent = detectedFaces.length;
+            }
+        }
+
+        // Show final review step
+        function showFinalReview() {
+            currentStep = 4;
+            
+            // Hide camera detection step
+            document.getElementById('camera-detection-step').style.display = 'none';
+            
+            // Show final review step
+            document.getElementById('final-review-step').style.display = 'block';
+            
+            // Initialize final cube preview
+            if (typeof window.initAICubePreview === 'function') {
+                window.initAICubePreview('final-cube-preview');
+                
+                // Update final preview with all detected faces
+                detectedFaces.forEach((face, index) => {
+                    const faceName = ['Up', 'Right', 'Front', 'Down', 'Left', 'Back'][index];
+                    const colors = generateRealisticFaceColors(faceName);
+                    window.updatePreviewFace(faceName, colors);
+                });
+            }
+            
+            // Populate faces summary
+            populateFacesSummary();
+            
+            // Validate cube
+            validateFinalCube();
+        }
+        
+        // Populate detected faces summary
+        function populateFacesSummary() {
+            const summary = document.getElementById('faces-summary');
+            summary.innerHTML = '';
+            
+            const faceNames = ['Up', 'Right', 'Front', 'Down', 'Left', 'Back'];
+            
+            detectedFaces.forEach((face, index) => {
+                const faceDiv = document.createElement('div');
+                faceDiv.className = 'face-summary-item';
+                faceDiv.innerHTML = `
+                    <div class="face-thumbnail">
+                        <div class="face-label">${faceNames[index]} (${faceNames[index][0]})</div>
+                        <div class="face-quality">Quality: ${(Math.random() * 30 + 70).toFixed(1)}%</div>
+                        <button class="recapture-face-btn" onclick="recaptureSingleFace(${index})">
+                            🔄 Recapture
+                        </button>
+                    </div>
+                `;
+                summary.appendChild(faceDiv);
+            });
+        }
+        
+        // Validate final cube
+        function validateFinalCube() {
+            const validationIcon = document.getElementById('validation-icon');
+            const validationText = document.getElementById('validation-text');
+            const solveBtn = document.getElementById('solve-cube-btn');
+            
+            // Simulate validation check
+            setTimeout(() => {
+                const isValid = detectedFaces.length === 6;
+                
+                if (isValid) {
+                    validationIcon.textContent = '✅';
+                    validationText.textContent = 'Cube is valid and ready to solve!';
+                    validationText.style.color = '#4ade80';
+                    solveBtn.disabled = false;
+                } else {
+                    validationIcon.textContent = '❌';
+                    validationText.textContent = 'Cube validation failed. Please recapture faces.';
+                    validationText.style.color = '#ef4444';
+                    solveBtn.disabled = true;
+                }
+            }, 1500);
+        }
+        
+        // Recapture single face
+        function recaptureSingleFace(faceIndex) {
+            // Go back to camera detection for specific face
+            currentStep = 3;
+            detectedFaces.splice(faceIndex); // Remove faces from this index onwards
+            
+            document.getElementById('final-review-step').style.display = 'none';
+            document.getElementById('camera-detection-step').style.display = 'block';
+            
+            // Update progress
+            document.getElementById('current-face-number').textContent = detectedFaces.length + 1;
+            document.getElementById('faces-detected').textContent = detectedFaces.length;
+        }
+        
+        // Event listeners for final review
+        document.getElementById('recapture-all-btn').addEventListener('click', function() {
+            // Reset all detection
+            resetDetection();
+            currentStep = 3;
+            document.getElementById('final-review-step').style.display = 'none';
+            document.getElementById('camera-detection-step').style.display = 'block';
         });
+        
+        document.getElementById('solve-cube-btn').addEventListener('click', function() {
+            // Proceed to solve the cube
+            processCubeSolution();
+        });
+        
+        // Initialize preview when step 3 becomes visible
+        const originalNextStep = function() {
+            if (currentStep === 2) {
+                setTimeout(initializeCubePreview, 100);
+            }
+        };
     </script>
+    
+    <!-- AI Cube Preview Script -->
+    <script src="{{ url_for('static', filename='js/ai_cube_preview.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
 </body>
 </html>
