@@ -1,5 +1,12 @@
 from flask import Flask, render_template, request, jsonify
-import kociemba
+
+# Try to import kociemba, but continue if it's not available
+try:
+    import kociemba
+    KOCIEMBA_AVAILABLE = True
+except ImportError:
+    KOCIEMBA_AVAILABLE = False
+    print("Warning: kociemba module not available. Cube solving functionality will be limited.")
 
 app = Flask(__name__)
 
@@ -12,6 +19,7 @@ def is_valid_cube_string(cube_str):
 @app.route("/")
 def index():
     return render_template("index.html")
+
 
 @app.route("/manual")
 def m_input():
@@ -36,8 +44,11 @@ def solve():
                 # Extract first 54 characters if longer
                 cube_str = cube_str[:54]
                 
-                # Try to solve the cube
-                solution = kociemba.solve(cube_str)
+                # Try to solve the cube if kociemba is available
+                if KOCIEMBA_AVAILABLE:
+                    solution = kociemba.solve(cube_str)
+                else:
+                    solution = "Solving functionality unavailable (kociemba module not installed)"
                 
                 # Redirect to solution page with the solution
                 from flask import redirect, url_for
@@ -57,8 +68,11 @@ def solve():
         return jsonify({"success": False, "error": "Invalid cube input."})
 
     try:
-        solution = kociemba.solve(cube_str)
-        return jsonify({"success": True, "solution": solution})
+        if KOCIEMBA_AVAILABLE:
+            solution = kociemba.solve(cube_str)
+            return jsonify({"success": True, "solution": solution})
+        else:
+            return jsonify({"success": False, "error": "Solving functionality unavailable (kociemba module not installed)"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 

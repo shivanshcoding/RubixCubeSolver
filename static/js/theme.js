@@ -1,5 +1,6 @@
 /**
- * Theme Management for Rubik's Cube Solver
+ * Unified Theme Management for Rubik's Cube Solver
+ * Combines functionality from theme.js, theme-new.js, and theme_toggle.js
  * Handles theme switching between light/dark modes with smooth transitions
  * and persistent user preferences.
  */
@@ -9,7 +10,6 @@
     const html = document.documentElement;
     const themeToggle = document.getElementById('theme-toggle');
     const themeIcon = document.getElementById('theme-icon');
-    const logo = document.getElementById('site-logo');
     
     // Theme configuration
     const THEMES = {
@@ -38,7 +38,7 @@
         currentTheme = theme;
         
         // Dispatch a custom event for other scripts to listen to
-        document.dispatchEvent(new CustomEvent('themeChange', { detail: { theme } }));
+        document.dispatchEvent(new CustomEvent('themechange', { detail: { theme } }));
     }
     
     /**
@@ -76,8 +76,14 @@
             }
         );
         
-        // Set the appropriate icon
-        themeIcon.textContent = theme === THEMES.LIGHT ? '☀️' : '🌙';
+        // Set the appropriate icon and aria-label
+        if (theme === THEMES.DARK) {
+            themeIcon.textContent = '☀️';
+            themeIcon.setAttribute('aria-label', 'Switch to light mode');
+        } else {
+            themeIcon.textContent = '🌙';
+            themeIcon.setAttribute('aria-label', 'Switch to dark mode');
+        }
     }
     
     /**
@@ -100,26 +106,8 @@
             });
         }
         
-        // Add logo animation if logo exists
-        if (logo) {
-            logo.addEventListener('click', () => {
-                logo.animate(
-                    [
-                        { transform: 'rotate(0deg) scale(1)' },
-                        { transform: 'rotate(-20deg) scale(1.2)' },
-                        { transform: 'rotate(0deg) scale(1)' }
-                    ],
-                    {
-                        duration: 600,
-                        easing: 'cubic-bezier(.4,2,.6,1)'
-                    }
-                );
-            });
-        }
-        
-        // Listen for system theme changes
+        // Listen for system preference changes
         prefersDarkScheme.addEventListener('change', (e) => {
-            // Only apply system theme if no user preference is set
             if (!localStorage.getItem('theme')) {
                 applyTheme(e.matches ? THEMES.DARK : THEMES.LIGHT);
             }
@@ -132,11 +120,4 @@
     } else {
         init();
     }
-    
-    // Export functions for external use if needed
-    window.themeManager = {
-        toggleTheme,
-        applyTheme,
-        getCurrentTheme: () => currentTheme
-    };
 })();

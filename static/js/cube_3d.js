@@ -39,6 +39,13 @@ function init3D() {
 
 function update3DCube() {
     if (!scene || !cubelets || !COLORS || !cubeState) return;
+    
+    // Use unified colors if available
+    const colorSource = window.CUBE_COLORS && window.CUBE_COLORS.getColorDefs ? 
+        window.CUBE_COLORS.getColorDefs().reduce((obj, color, idx) => {
+            obj[idx] = { hex: color.hex };
+            return obj;
+        }, {}) : COLORS;
 
     for (let c of cubelets) {
         let { mesh, x, y, z } = c;
@@ -46,7 +53,7 @@ function update3DCube() {
         for (let i = 0; i < 6; i++)
             mesh.material[i].color.set(0x232323);
 
-        if (y === 1) mesh.material[2].color.set(COLORS[cubeState[0][z + 1][x + 1]].hex);
+        if (y === 1) mesh.material[2].color.set(colorSource[cubeState[0][z + 1][x + 1]].hex);
         if (y === -1) mesh.material[3].color.set(COLORS[cubeState[3][2 - (z + 1)][x + 1]].hex);
         if (x === 1) mesh.material[0].color.set(COLORS[cubeState[1][2 - (y + 1)][2 - (z + 1)]].hex);
         if (x === -1) mesh.material[1].color.set(COLORS[cubeState[4][2 - (y + 1)][z + 1]].hex);
@@ -77,84 +84,6 @@ function getFaceCubelets(face) {
     return res;
 }
 
-//Theek karna hai isko
-// function rotateCubeletMaterials(face, direction, cubelet) {
-//     const mat = cubelet.mesh.material;
-//     let rotated;
-
-//     switch (face) {
-//         case 'U':
-//         case 'D':
-//             rotated = [mat[4], mat[0], mat[5], mat[1]]; // L, F, R, B
-//             if (direction === -1) rotated = [mat[1], mat[5], mat[0], mat[4]]; // reversed manually
-//             [mat[4], mat[0], mat[5], mat[1]] = rotated;
-//             break;
-
-//         case 'F':
-//         case 'B':
-//             rotated = [mat[2], mat[0], mat[3], mat[1]]; // U, R, D, L
-//             if (direction === -1) rotated = [mat[1], mat[3], mat[0], mat[2]];
-//             [mat[2], mat[0], mat[3], mat[1]] = rotated;
-//             break;
-
-//         case 'R':
-//         case 'L':
-//             rotated = [mat[2], mat[5], mat[3], mat[4]]; // U, B, D, F
-//             if (direction === -1) rotated = [mat[4], mat[3], mat[5], mat[2]];
-//             [mat[2], mat[5], mat[3], mat[4]] = rotated;
-//             break;
-//     }
-// }
-
-function rotateCubeletMaterials(face, direction, cubelet) {
-    const mat = cubelet.mesh.material;
-    let rotated;
-
-    switch (face) {
-        case 'U':
-            rotated = direction === 1
-                ? [mat[1], mat[4], mat[0], mat[5]]  // L, F, R, B → CW
-                : [mat[1], mat[4], mat[0], mat[5]]; // CCW
-            [mat[1], mat[4], mat[0], mat[5]] = rotated;
-            break;
-
-        case 'D':
-            rotated = direction === 1
-                ? [mat[0], mat[5], mat[1], mat[4]]  // R, B, L, F → CW
-                : [mat[0], mat[5], mat[1], mat[4]]; // CCW
-            [mat[0], mat[5], mat[1], mat[4]] = rotated;
-            break;
-
-        case 'F':
-            rotated = direction === 1
-                ? [mat[1], mat[2], mat[0], mat[3]]  // L, U, R, D → CW
-                : [mat[1], mat[2], mat[0], mat[3]]; // CCW
-            [mat[1], mat[2], mat[0], mat[3]] = rotated;
-            break;
-
-        case 'B':
-            rotated = direction === 1
-                ? [mat[0], mat[3], mat[1], mat[2]]  // R, D, L, U → CW
-                : [mat[0], mat[3], mat[1], mat[2]]; // CCW
-            [mat[0], mat[3], mat[1], mat[2]] = rotated;
-            break;
-
-        case 'R':
-            rotated = direction == 1
-                ? [mat[2], mat[4], mat[3], mat[5]]  // U, F, D, B → CW
-                : [mat[2], mat[4], mat[3], mat[5]]; // CCW
-            [mat[2], mat[4], mat[3], mat[5]] = rotated;
-            break;
-
-        case 'L':
-            rotated = direction == 1
-                ? [mat[2], mat[5], mat[3], mat[4]]  // U, B, D, F → CW
-                : [mat[2], mat[5], mat[3], mat[4]]; // CCW
-            [mat[2], mat[5], mat[3], mat[4]] = rotated;
-            break;
-    }
-}
-
 
 function animateFaceRotation(face, direction, times, callback) {
     function oneTurn(turnNum) {
@@ -171,11 +100,7 @@ function animateFaceRotation(face, direction, times, callback) {
 
         const axisVec = new THREE.Vector3(...axisMap[face]);
 
-        // ✅ Flip for these faces so visual CW matches standard notation
-        const flipFaces = ['L', 'D', 'B', 'R','F', 'U'];
-        const visualDirection = flipFaces.includes(face) ? -direction : direction;
-
-        const angle = (Math.PI / 2) * visualDirection;
+        const angle = (Math.PI / 2) * direction;
 
         const totalFrames = 20;
         let frame = 0;
@@ -196,7 +121,6 @@ function animateFaceRotation(face, direction, times, callback) {
                         Math.round(c.mesh.position.y * 1000) / 1000,
                         Math.round(c.mesh.position.z * 1000) / 1000
                     );
-                    rotateCubeletMaterials(face, direction, c);
                 });
                 rotateFaceCoords(face, direction);
                 rotateFaceInCubeState(face, direction);
@@ -269,10 +193,10 @@ function rotateFaceInCubeState(face, direction) {
 
 function parseMove(move) {
     const face = move[0];
-    let direction = 1;
+    let direction = -1;
     let times = 1;
     if (move.length > 1) {
-        if (move[1] === "'") direction = -1;
+        if (move[1] === "'") direction = 1;
         else if (move[1] === "2") times = 2;
     }
     return { face, direction, times };

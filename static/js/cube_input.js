@@ -1,4 +1,6 @@
-let COLORS = [
+// Initialize colors from unified color system if available
+let COLORS = window.CUBE_COLORS && window.CUBE_COLORS.initColors ? 
+    window.CUBE_COLORS.initColors() : [
     { name: 'white', hex: '#fff', k: 'U' },    // Up
     { name: 'red', hex: '#ff2222', k: 'R' },   // Right
     { name: 'green', hex: '#17d016', k: 'F' }, // Front
@@ -8,7 +10,10 @@ let COLORS = [
 ];
 let selectedColor = 0;
 
-let cubeState = Array(6).fill().map(() => Array(3).fill().map(() => Array(3).fill(0)));
+// Initialize cube state from unified color system if available
+let cubeState = window.CUBE_COLORS && window.CUBE_COLORS.createDefaultCubeState ? 
+    window.CUBE_COLORS.createDefaultCubeState() : 
+    Array(6).fill().map(() => Array(3).fill().map(() => Array(3).fill(0)));
 
 
 const FACE_ORDER = ['up', 'right', 'front', 'down', 'left', 'back'];
@@ -25,6 +30,12 @@ const COLOR_IDX_TO_FACE_LETTER = {
 
 // Use user-selected colors if available
 function getUserColors() {
+    // Use unified color system if available
+    if (window.CUBE_COLORS && window.CUBE_COLORS.getUserColors) {
+        return window.CUBE_COLORS.getUserColors();
+    }
+    
+    // Fallback implementation
     let stored = localStorage.getItem('cube_user_colors');
     if (stored) {
         let arr = JSON.parse(stored);

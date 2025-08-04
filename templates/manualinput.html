@@ -2,12 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Rubik’s Cube Manual Input</title>
+    <title>Rubik's Cube Manual Input</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Theme CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base-theme.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/manual-input.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/loading-screen.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/header-footer.css') }}">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Three.js -->
@@ -16,12 +17,63 @@
     <link rel="preload" href="{{ url_for('static', filename='js/theme.js') }}" as="script">
 </head>
 <body>
-    <div class="back-button-container">
-        <a href="/" class="back-button">
-            <span>← Back to Home</span>
-        </a>
-    </div>
-    <h1>Rubik’s Cube Manual Input</h1>
+    <!-- Background elements -->
+    <div class="background-grid"></div>
+    <div class="background-gradient"></div>
+    
+
+        <header class="main-header">
+        <div class="header-content">
+            <div class="logo-container">
+                <div class="logo" id="site-logo">
+                    <!-- Animated Rubik's Cube SVG logo -->
+                    <svg width="60" height="60" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg" class="cube-logo">
+                        <g class="cube-face front">
+                            <rect x="10" y="10" width="40" height="40" rx="4" fill="var(--accent-primary)" filter="url(#glow)" />
+                            <rect x="15" y="15" width="10" height="10" rx="1" fill="#ff3d00" class="cube-tile" />
+                            <rect x="25" y="15" width="10" height="10" rx="1" fill="#ffd600" class="cube-tile" />
+                            <rect x="35" y="15" width="10" height="10" rx="1" fill="#00c853" class="cube-tile" />
+                            <rect x="15" y="25" width="10" height="10" rx="1" fill="#2962ff" class="cube-tile" />
+                            <rect x="25" y="25" width="10" height="10" rx="1" fill="#ffffff" class="cube-tile" />
+                            <rect x="35" y="25" width="10" height="10" rx="1" fill="#ffeb3b" class="cube-tile" />
+                            <rect x="15" y="35" width="10" height="10" rx="1" fill="#ff6d00" class="cube-tile" />
+                            <rect x="25" y="35" width="10" height="10" rx="1" fill="#d500f9" class="cube-tile" />
+                            <rect x="35" y="35" width="10" height="10" rx="1" fill="#00bcd4" class="cube-tile" />
+                        </g>
+                        <defs>
+                            <filter id="glow" x="0" y="0" width="60" height="60" filterUnits="userSpaceOnUse">
+                                <feGaussianBlur stdDeviation="2" result="blur" />
+                                <feFlood flood-color="var(--accent-primary)" flood-opacity="0.5" result="color" />
+                                <feComposite in="color" in2="blur" operator="in" result="glow" />
+                                <feMerge>
+                                    <feMergeNode in="glow" />
+                                    <feMergeNode in="SourceGraphic" />
+                                </feMerge>
+                            </filter>
+                        </defs>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <h1 class="brand-name">CubeMaster<span class="brand-accent">AI</span></h1>
+                </div>
+            </div>
+            <nav class="main-nav">
+                <ul class="nav-links">
+                    <li><a href="/" class="nav-link">Home</a></li>
+                    <li><a href="/#features" class="nav-link">Features</a></li>
+                    <li><a href="#about" class="nav-link">About</a></li>
+                    <li><a href="/#tech" class="nav-link">Technology</a></li>
+                </ul>
+            </nav>
+            <div class="theme-control">
+                <button class="theme-toggle" id="theme-toggle" aria-label="Toggle dark/light mode">
+                    <span class="theme-icon" id="theme-icon">🌙</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <h1 class = "start-manual">Rubik’s Cube Manual Input</h1>
     <section class="instructions-section">
         <h2>Step 1: Choose Your Cube Colors</h2>
         <ol class="instructions-list">
@@ -76,6 +128,57 @@
         </div>
     </div>
 
+    <footer class="main-footer">
+        <div class="footer-content">
+            <div class="footer-logo">
+                <div class="logo-small">
+                    <!-- Small version of the logo -->
+                    <svg width="40" height="40" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="10" y="10" width="40" height="40" rx="4" fill="var(--accent-primary)" />
+                    </svg>
+                </div>
+                <div class="footer-brand">
+                    <h3 class="footer-brand-name">CubeMaster<span>AI</span></h3>
+                </div>
+            </div>
+            
+            <div class="footer-links">
+                <div class="footer-contact">
+                    <h4>Contact</h4>
+                    <p>Shivansh Rana</p>
+                    <p>Computer Science & Engineering Department</p>
+                    <p>Delhi Technogical University</p>
+                    <p>Email: shivanshrana_23cs400@dtu.ac.in </p>
+                </div>
+                
+                <div class="footer-social">
+                    <h4>Connect</h4>
+                    <div class="social-icons">
+                        <a href="https://www.linkedin.com/in/shivanshranadtu" target="_blank" class="social-icon" aria-label="LinkedIn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path>
+                                <rect x="2" y="9" width="4" height="12"></rect>
+                                <circle cx="4" cy="4" r="2"></circle>
+                            </svg>
+                        </a>
+                        <a href="https://instagram.com/the_realshivansh" target="_blank" class="social-icon" aria-label="Instagram">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                                <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer-bottom">
+            <p>&copy; 2025-2026 CubeMasterAI | All rights reserved.</p>
+        </div>
+    </footer>
+
+
     <!-- Loading Screen -->
     <div id="loading-screen" class="loading-overlay" style="display: none;">
         <div class="loading-container">
@@ -122,11 +225,13 @@
         </div>
     </div>
 
+
     <script src="{{ url_for('static', filename='js/solver_anim.js') }}"></script>
     <script src="{{ url_for('static', filename='js/cube_input.js') }}"></script>
     <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/cube_3d.js') }}" defer></script>
-    <script src="{{ url_for('static', filename='js/manual_palette.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/palette.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/manual_interactions.js') }}"></script>
 
 <script>
 // Restore cube state from query param if provided
@@ -257,5 +362,6 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 });
 </script>
+
 </body>
 </html>

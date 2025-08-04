@@ -7,16 +7,46 @@ body {
   position: relative;
 }
 
-.background-animated {
+/* Interactive elements */
+a,
+button,
+input[type="color"],
+.color-btn {
+  cursor: pointer;
+}
+
+/* Background elements */
+.background-grid {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
+  background-image: 
+      linear-gradient(to right, var(--border-light) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--border-light) 1px, transparent 1px);
+  background-size: 40px 40px;
+  opacity: 0.1;
+  z-index: -2;
+  pointer-events: none;
+}
+
+.background-gradient {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at 50% 0%, var(--accent-primary), transparent 70%);
+  opacity: 0.15;
   z-index: -1;
-  background: var(--gradient-tertiary);
-  opacity: 0.05;
-  animation: gradientShift 15s ease infinite;
+  pointer-events: none;
+}
+
+.back-button{
+    position: fixed;
+    bottom: 2rem;
+    left: 2rem;
 }
 
 /* Main Title */
@@ -24,7 +54,8 @@ h1 {
   text-align: center;
   font-size: 3rem;
   font-weight: 700;
-  margin: 0 0 3rem;
+  margin-top: 7rem;
+  margin-bottom: 3rem;
   letter-spacing: 0.5px;
   background: var(--gradient-primary);
   -webkit-background-clip: text;
@@ -724,3 +755,4 @@ h1 {
     max-width: 250px;
   }
 }
+

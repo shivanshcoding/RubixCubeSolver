@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Cube Detection - CubeMaster AI</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="static/css/base-theme.css">
+    <link rel="stylesheet" href="static/css/ai_input_new.css">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- JavaScript Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.4/gsap.min.js"></script>
+</head>
+<body>
+    <!-- Custom Cursor -->
+    <div class="cursor-follower"></div>
+    <div class="cursor-dot"></div>
+    
+    <!-- Background Elements -->
+    <div class="background-grid"></div>
+    <div class="background-gradient"></div>
+    
+    <!-- Header -->
+    <header class="main-header">
+        <div class="header-content">
+            <div class="logo-container">
+                <a href="index_new.html" class="logo-link">
+                    <div class="logo">
+                        <svg class="cube-logo" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path class="cube-tile" d="M12 2L2 7L12 12L22 7L12 2Z" fill="var(--accent-primary)"/>
+                            <path class="cube-tile" d="M2 7V17L12 22V12L2 7Z" fill="var(--accent-secondary)"/>
+                            <path class="cube-tile" d="M22 7V17L12 22V12L22 7Z" fill="var(--accent-tertiary)"/>
+                        </svg>
+                    </div>
+                </a>
+                <div class="brand-text">
+                    <h1 class="brand-name">CubeMaster<span class="brand-accent">AI</span></h1>
+                    <p class="brand-tagline">Advanced Rubik's Cube Solver</p>
+                </div>
+            </div>
+            
+            <div class="theme-control">
+                <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme">
+                    <i class="fas fa-moon"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+    
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="process-container">
+            <!-- Step Progress Indicator -->
+            <div class="step-progress">
+                <div class="step-item" data-step="1">
+                    <div class="step-number">1</div>
+                    <div class="step-label">Color Selection</div>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step-item" data-step="2">
+                    <div class="step-number">2</div>
+                    <div class="step-label">Face Detection</div>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step-item" data-step="3">
+                    <div class="step-number">3</div>
+                    <div class="step-label">Cube Review</div>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step-item" data-step="4">
+                    <div class="step-number">4</div>
+                    <div class="step-label">Solution</div>
+                </div>
+            </div>
+            
+            <!-- Step 1: Color Selection -->
+            <div class="step-content" data-step="1">
+                <div class="step-header">
+                    <h2>Select Your Cube Colors</h2>
+                    <p>Choose the colors for each face of your Rubik's Cube. Each color must be used exactly once.</p>
+                </div>
+                
+                <div class="color-selection-container">
+                    <div class="face-color-selection" data-face="up">
+                        <div class="face-label">Top Face</div>
+                        <div class="color-options">
+                            <div class="color-option selected" data-color="white" style="background-color: #FFFFFF;"></div>
+                            <div class="color-option" data-color="orange" style="background-color: #FF9800;"></div>
+                            <div class="color-option" data-color="green" style="background-color: #4CAF50;"></div>
+                            <div class="color-option" data-color="yellow" style="background-color: #FFEB3B;"></div>
+                            <div class="color-option" data-color="red" style="background-color: #F44336;"></div>
+                            <div class="color-option" data-color="blue" style="background-color: #2196F3;"></div>
+                        </div>
+                        <div class="selected-color-display">
+                            <div class="selected-color" style="background-color: #FFFFFF;"></div>
+                            <span>Selected: White</span>
+                        </div>
+                    </div>
+                    
+                    <div class="face-color-selection" data-face="right">
+                        <div class="face-label">Right Face</div>
+                        <div class="color-options">
+                            <div class="color-option" data-color="white" style="background-color: #FFFFFF;"></div>
+                            <div class="color-option selected" data-color="orange" style="background-color: #FF9800;"></div>
+                            <div class="color-option" data-color="green" style="background-color: #4CAF50;"></div>
+                            <div class="color-option" data-color="yellow" style="background-color: #FFEB3B;"></div>
+                            <div class="color-option" data-color="red" style="background-color: #F44336;"></div>
+                            <div class="color-option" data-color="blue" style="background-color: #2196F3;"></div>
+                        </div>
+                        <div class="selected-color-display">
+                            <div class="selected-color" style="background-color: #FF9800;"></div>
+                            <span>Selected: Orange</span>
+                        </div>
+                    </div>
+                    
+                    <div class="face-color-selection" data-face="front">
+                        <div class="face-label">Front Face</div>
+                        <div class="color-options">
+                            <div class="color-option" data-color="white" style="background-color: #FFFFFF;"></div>
+                            <div class="color-option" data-color="orange" style="background-color: #FF9800;"></div>
+                            <div class="color-option selected" data-color="green" style="background-color: #4CAF50;"></div>
+                            <div class="color-option" data-color="yellow" style="background-color: #FFEB3B;"></div>
+                            <div class="color-option" data-color="red" style="background-color: #F44336;"></div>
+                            <div class="color-option" data-color="blue" style="background-color: #2196F3;"></div>
+                        </div>
+                        <div class="selected-color-display">
+                            <div class="selected-color" style="background-color: #4CAF50;"></div>
+                            <span>Selected: Green</span>
+                        </div>
+                    </div>
+                    
+                    <div class="face-color-selection" data-face="down">
+                        <div class="face-label">Bottom Face</div>
+                        <div class="color-options">
+                            <div class="color-option" data-color="white" style="background-color: #FFFFFF;"></div>
+                            <div class="color-option" data-color="orange" style="background-color: #FF9800;"></div>
+                            <div class="color-option" data-color="green" style="background-color: #4CAF50;"></div>
+                            <div class="color-option selected" data-color="yellow" style="background-color: #FFEB3B;"></div>
+                            <div class="color-option" data-color="red" style="background-color: #F44336;"></div>
+                            <div class="color-option" data-color="blue" style="background-color: #2196F3;"></div>
+                        </div>
+                        <div class="selected-color-display">
+                            <div class="selected-color" style="background-color: #FFEB3B;"></div>
+                            <span>Selected: Yellow</span>
+                        </div>
+                    </div>
+                    
+                    <div class="face-color-selection" data-face="left">
+                        <div class="face-label">Left Face</div>
+                        <div class="color-options">
+                            <div class="color-option" data-color="white" style="background-color: #FFFFFF;"></div>
+                            <div class="color-option" data-color="orange" style="background-color: #FF9800;"></div>
+                            <div class="color-option" data-color="green" style="background-color: #4CAF50;"></div>
+                            <div class="color-option" data-color="yellow" style="background-color: #FFEB3B;"></div>
+                            <div class="color-option selected" data-color="red" style="background-color: #F44336;"></div>
+                            <div class="color-option" data-color="blue" style="background-color: #2196F3;"></div>
+                        </div>
+                        <div class="selected-color-display">
+                            <div class="selected-color" style="background-color: #F44336;"></div>
+                            <span>Selected: Red</span>
+                        </div>
+                    </div>
+                    
+                    <div class="face-color-selection" data-face="back">
+                        <div class="face-label">Back Face</div>
+                        <div class="color-options">
+                            <div class="color-option" data-color="white" style="background-color: #FFFFFF;"></div>
+                            <div class="color-option" data-color="orange" style="background-color: #FF9800;"></div>
+                            <div class="color-option" data-color="green" style="background-color: #4CAF50;"></div>
+                            <div class="color-option" data-color="yellow" style="background-color: #FFEB3B;"></div>
+                            <div class="color-option" data-color="red" style="background-color: #F44336;"></div>
+                            <div class="color-option selected" data-color="blue" style="background-color: #2196F3;"></div>
+                        </div>
+                        <div class="selected-color-display">
+                            <div class="selected-color" style="background-color: #2196F3;"></div>
+                            <span>Selected: Blue</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="color-selection-summary">
+                    <h3>Color Selection Summary</h3>
+                    <div class="color-summary-grid">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                    <div class="color-validation-message">Color selection is valid!</div>
+                </div>
+                
+                <div class="step-actions">
+                    <button class="action-button secondary" onclick="window.location.href='index_new.html'">Cancel</button>
+                    <button id="color-selection-next" class="action-button primary">Next: Face Detection</button>
+                </div>
+            </div>
+            
+            <!-- Step 2: Face Detection -->
+            <div class="step-content" data-step="2" style="display: none;">
+                <div class="step-header">
+                    <h2>Detect Cube Faces</h2>
+                    <p>Position each face of your cube in the camera frame and capture it. Follow the orientation guide for each face.</p>
+                </div>
+                
+                <div class="detection-container">
+                    <div class="camera-container">
+                        <div class="camera-frame">
+                            <video id="camera-feed" autoplay playsinline></video>
+                            <div class="camera-overlay">
+                                <div class="detection-guide"></div>
+                                <div class="detection-corners"><span></span></div>
+                            </div>
+                        </div>
+                        <div class="camera-controls">
+                            <button id="capture-button" class="camera-button">
+                                <i class="fas fa-camera camera-icon"></i>
+                                Capture Face
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="detection-info">
+                        <div class="face-preview-container">
+                            <h3>Current Face: <span id="current-face-name">Top (White)</span></h3>
+                            <div class="face-orientation-guide">
+                                <div class="orientation-cube">
+                                    <div class="orientation-face up">U</div>
+                                    <div class="orientation-face right">R</div>
+                                    <div class="orientation-face front">F</div>
+                                    <div class="orientation-face down">D</div>
+                                    <div class="orientation-face left">L</div>
+                                    <div class="orientation-face back">B</div>
+                                </div>
+                                <div class="orientation-instructions">
+                                    <p id="orientation-instructions">Hold the cube with the <span>white center</span> facing up. Make sure the entire face is visible and well-lit.</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="detection-progress">
+                            <h3>Detection Progress</h3>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar" style="width: 0%"></div>
+                            </div>
+                            <div class="progress-text">0 of 6 faces detected</div>
+                            
+                            <div class="detected-faces-grid">
+                                <!-- Will be populated by JavaScript as faces are detected -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="step-actions">
+                    <button id="face-detection-back" class="action-button secondary">Back</button>
+                    <button id="face-detection-next" class="action-button primary" disabled>Next: Cube Review</button>
+                </div>
+            </div>
+            
+            <!-- Step 3: Cube Review -->
+            <div class="step-content" data-step="3" style="display: none;">
+                <div class="step-header">
+                    <h2>Review Your Cube</h2>
+                    <p>Verify that all faces have been detected correctly. You can recapture any face if needed.</p>
+                </div>
+                
+                <div class="review-container">
+                    <div class="cube-preview-container">
+                        <h3>3D Cube Preview</h3>
+                        <div id="cube-preview"></div>
+                    </div>
+                    
+                    <div class="faces-summary-container">
+                        <h3>Detected Faces</h3>
+                        <div class="faces-summary">
+                            <!-- Will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="cube-validation-message">Please complete all face detections.</div>
+                
+                <div class="step-actions">
+                    <button id="cube-review-back" class="action-button secondary">Back</button>
+                    <button id="solve-cube-button" class="action-button primary" disabled>Solve Cube</button>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Loading Screen -->
+    <div class="loading-screen">
+        <div class="loading-content">
+            <div class="loading-animation">
+                <div class="loading-cube">
+                    <div class="loading-cube-face front"></div>
+                    <div class="loading-cube-face back"></div>
+                    <div class="loading-cube-face right"></div>
+                    <div class="loading-cube-face left"></div>
+                    <div class="loading-cube-face top"></div>
+                    <div class="loading-cube-face bottom"></div>
+                </div>
+            </div>
+            <h3 class="loading-title">Solving Your Cube</h3>
+            <p class="loading-message">Our AI is analyzing your cube and calculating the optimal solution...</p>
+            <div class="loading-progress-container">
+                <div class="loading-progress-bar"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Face Confirmation Modal -->
+    <div id="face-confirmation-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Confirm Face</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="detected-face-preview">
+                    <h4>Captured Image</h4>
+                    <div class="face-image-container">
+                        <img src="" alt="Detected face">
+                    </div>
+                </div>
+                
+                <div class="detected-colors-grid">
+                    <h4>Detected Colors</h4>
+                    <div class="color-grid">
+                        <div class="color-grid-item"></div>
+                        <div class="color-grid-item"></div>
+                        <div class="color-grid-item"></div>
+                        <div class="color-grid-item"></div>
+                        <div class="color-grid-item"></div>
+                        <div class="color-grid-item"></div>
+                        <div class="color-grid-item"></div>
+                        <div class="color-grid-item"></div>
+                        <div class="color-grid-item"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-button secondary recapture-face-btn">Recapture</button>
+                <button class="modal-button secondary manual-input-btn">Manual Input</button>
+                <button class="modal-button primary confirm-face-btn">Confirm</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Manual Input Modal -->
+    <div id="manual-input-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Manual Color Input</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="manual-color-grid">
+                    <div class="manual-color-item"></div>
+                    <div class="manual-color-item"></div>
+                    <div class="manual-color-item"></div>
+                    <div class="manual-color-item"></div>
+                    <div class="manual-color-item"></div>
+                    <div class="manual-color-item"></div>
+                    <div class="manual-color-item"></div>
+                    <div class="manual-color-item"></div>
+                    <div class="manual-color-item"></div>
+                </div>
+                
+                <div class="color-palette">
+                    <div class="palette-color selected" data-color="white" style="background-color: #FFFFFF;"></div>
+                    <div class="palette-color" data-color="orange" style="background-color: #FF9800;"></div>
+                    <div class="palette-color" data-color="green" style="background-color: #4CAF50;"></div>
+                    <div class="palette-color" data-color="yellow" style="background-color: #FFEB3B;"></div>
+                    <div class="palette-color" data-color="red" style="background-color: #F44336;"></div>
+                    <div class="palette-color" data-color="blue" style="background-color: #2196F3;"></div>
+                </div>
+                
+                <p class="manual-input-instructions">Select a color from the palette, then click on the grid squares to apply it. The center square should match the center color of your cube face.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-button secondary" onclick="hideModal('manual-input-modal')">Cancel</button>
+                <button class="modal-button primary save-colors-btn">Save Colors</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quality Check Modal -->
+    <div id="quality-check-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Detection Quality Issues</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="quality-issues">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+                
+                <div class="quality-tips">
+                    <h4>Tips for Better Detection:</h4>
+                    <ul>
+                        <li>Ensure good lighting conditions with no glare</li>
+                        <li>Position the cube face parallel to the camera</li>
+                        <li>Hold the cube steady and ensure the entire face is visible</li>
+                        <li>Make sure the camera is focused on the cube</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-button secondary switch-manual-btn">Switch to Manual</button>
+                <button class="modal-button primary retry-capture-btn">Try Again</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- JavaScript -->
+    <script src="static/js/theme-new.js"></script>
+    <script src="static/js/ai_input_interactions.js"></script>
+    <script src="static/js/ai_input_new.js"></script>
+</body>
+</html>

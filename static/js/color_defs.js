@@ -17,10 +17,11 @@ export function getColorDefs() {
 
 export function parseMove(move) {
     const face = move[0];
-    let direction = 1, times = 1;
+    let direction = -1;
+    let times = 1;
     if (move.length > 1) {
-        if (move[1] === "'") direction = -1;
+        if (move[1] === "'") direction = 1;
         else if (move[1] === "2") times = 2;
     }
     return { face, direction, times };
-} 
+}

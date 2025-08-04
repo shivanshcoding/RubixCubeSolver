@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+  <!-- Cube Base -->
+  <g transform="translate(100 100) rotate(30) scale(0.8)">
+    <!-- Top face -->
+    <polygon points="0,-50 -50,0 0,50 50,0" fill="#0ea5e9" stroke="#ffffff" stroke-width="2" />
+    
+    <!-- Left face -->
+    <polygon points="-50,0 -50,70 0,120 0,50" fill="#8b5cf6" stroke="#ffffff" stroke-width="2" />
+    
+    <!-- Right face -->
+    <polygon points="0,50 0,120 50,70 50,0" fill="#06b6d4" stroke="#ffffff" stroke-width="2" />
+    
+    <!-- Grid lines for cube faces -->
+    <!-- Top face grid -->
+    <line x1="-25" y1="-25" x2="25" y2="25" stroke="#ffffff" stroke-width="1" />
+    <line x1="25" y1="-25" x2="-25" y2="25" stroke="#ffffff" stroke-width="1" />
+    
+    <!-- Left face grid -->
+    <line x1="-50" y1="35" x2="0" y2="85" stroke="#ffffff" stroke-width="1" />
+    <line x1="-25" y1="0" x2="-25" y2="70" stroke="#ffffff" stroke-width="1" />
+    
+    <!-- Right face grid -->
+    <line x1="0" y1="85" x2="50" y2="35" stroke="#ffffff" stroke-width="1" />
+    <line x1="25" y1="0" x2="25" y2="70" stroke="#ffffff" stroke-width="1" />
+  </g>
+  
+  <!-- Text -->
+  <text x="100" y="180" font-family="'Space Grotesk', sans-serif" font-size="24" font-weight="bold" text-anchor="middle" fill="#1e293b">
+    CubeMasterAI
+  </text>
+</svg>

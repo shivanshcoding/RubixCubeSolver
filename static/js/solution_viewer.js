@@ -7,7 +7,7 @@ let animationTimeout = null;
 
 // 3D Cube Setup
 let scene, camera, renderer, cubelets = [];
-import { getColorDefs, parseMove } from './color_defs.js';
+// Use unified color system if available, otherwise import from color_defs.js
 let COLORS = [];
 let cubeState;
 let cubeStr = '';
@@ -247,15 +247,6 @@ function animateMove(idx) {
     });
 }
 
-// function playMoves() {
-//     if (animating) return;
-//     animating = true;
-//     if (currentMoveIdx >= solutionMoves.length - 1) {
-//         currentMoveIdx = -1;
-//     }
-//     animateMove(currentMoveIdx + 1);
-// }
-
 function pauseMoves() {
     animating = false;
     if (animationTimeout) {
@@ -326,8 +317,22 @@ window.addEventListener('DOMContentLoaded', () => {
     const solutionStr = url.searchParams.get('solution') || '';
     cubeStr = url.searchParams.get('cube_str') || '';
 
-    // Initialize colors from user preferences
-    COLORS = getColorDefs();
+    // Initialize colors from unified color system if available
+    if (window.CUBE_COLORS && window.CUBE_COLORS.getColorDefs) {
+        COLORS = window.CUBE_COLORS.getColorDefs();
+    } else {
+        // Fallback to defaults if unified system not available
+        console.warn('Could not load unified colors, using defaults');
+        const fallbackColors = ['#ffffff', '#ff2222', '#17d016', '#ffe900', '#ff9900', '#1177ff'];
+        COLORS = [
+            { name: 'white', hex: fallbackColors[0] },
+            { name: 'red', hex: fallbackColors[1] },
+            { name: 'green', hex: fallbackColors[2] },
+            { name: 'yellow', hex: fallbackColors[3] },
+            { name: 'orange', hex: fallbackColors[4] },
+            { name: 'blue', hex: fallbackColors[5] }
+        ];
+    }
 
     // Log for debugging
     console.log('Solution viewer initialized:');
