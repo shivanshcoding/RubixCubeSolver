@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Rubik's Cube Manual Input</title>
+    <title>Manual Input - CubeMasterAI</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Theme CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base-theme.css') }}">
@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/header-footer.css') }}">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Three.js -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.146.0/build/three.min.js"></script>
     <!-- Preload theme script for better performance -->
@@ -61,7 +62,7 @@
                 <ul class="nav-links">
                     <li><a href="/" class="nav-link">Home</a></li>
                     <li><a href="/#features" class="nav-link">Features</a></li>
-                    <li><a href="#about" class="nav-link">About</a></li>
+                    <li><a href="/#about" class="nav-link">About</a></li>
                     <li><a href="/#tech" class="nav-link">Technology</a></li>
                 </ul>
             </nav>
@@ -362,6 +363,56 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 });
 </script>
+
+<!-- Footer -->
+<footer class="main-footer">
+        <div class="footer-content">
+            <div class="footer-logo">
+                <div class="logo-small">
+                    <svg width="40" height="40" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="10" y="10" width="40" height="40" rx="4" fill="var(--accent-primary)" />
+                    </svg>
+                </div>
+                <div class="footer-brand">
+                    <h3 class="footer-brand-name">CubeMaster<span>AI</span></h3>
+                </div>
+            </div>
+            
+            <div class="footer-links">
+                <div class="footer-contact">
+                    <h4>Contact</h4>
+                    <p>Shivansh Rana</p>
+                    <p>Computer Science & Engineering Department</p>
+                    <p>Delhi Technogical University</p>
+                    <p>Email: shivanshrana_23cs400@dtu.ac.in </p>
+                </div>
+                
+                <div class="footer-social">
+                    <h4>Connect</h4>
+                    <div class="social-icons">
+                        <a href="https://www.linkedin.com/in/shivanshranadtu" target="_blank" class="social-icon" aria-label="LinkedIn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path>
+                                <rect x="2" y="9" width="4" height="12"></rect>
+                                <circle cx="4" cy="4" r="2"></circle>
+                            </svg>
+                        </a>
+                        <a href="https://instagram.com/the_realshivansh" target="_blank" class="social-icon" aria-label="Instagram">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                                <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer-bottom">
+            <p>&copy; 2025-2026 CubeMasterAI | All rights reserved.</p>
+        </div>
+    </footer>
 
 </body>
 </html>

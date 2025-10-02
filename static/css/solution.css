@@ -9,20 +9,51 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    padding-top: 70px;
-    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+    min-height: 100vh;
+    background-color: var(--bg-primary);
     font-family: "Montserrat", sans-serif;
     overflow-x: hidden;
+    position: relative;
+    padding-top: 100px;
+    padding-bottom: 100px;
+}
+
+/* Background elements */
+.background-grid {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: linear-gradient(var(--grid-color) 1px, transparent 1px),
+                      linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.1;
+    z-index: -2;
+}
+
+.background-gradient {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at 15% 50%, var(--accent-primary-transparent), transparent 25%),
+                radial-gradient(circle at 85% 30%, var(--accent-secondary-transparent), transparent 25%);
+    opacity: 0.5;
+    z-index: -1;
 }
 
 /***************  Containers  *************/
 .solution-container {
-    width: 1200px;
+    width: 100%;
+    max-width: 1200px;
     display: flex;
     flex-direction: column;
     justify-content: center;
     gap: 50px;
     margin-bottom: 50px;
+    padding: 0 20px;
 }
 
 /***************  Header  *****************/
@@ -204,26 +235,168 @@ body {
 }
 
 .back-input-container {
-    position: fixed;
-    bottom: 2rem;
-    right: 2rem;
-    z-index: 1000;
+    margin-top: 2rem;
+    text-align: center;
+    margin-bottom: 3rem;
 }
 
 .back-input-btn {
     display: inline-block;
-    padding: 0.75rem 1.25rem;
-    background: var(--accent-secondary);
-    color: var(--text-inverse);
-    border-radius: 50px;
-    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
     text-decoration: none;
-    box-shadow: 0 12px 24px -10px var(--accent-secondary);
-    transition: transform 0.25s ease;
+    font-weight: 500;
+    transition: all 0.2s ease;
 }
 
 .back-input-btn:hover {
-    transform: translateY(-3px);
+    background-color: var(--accent-primary);
+    color: var(--text-on-accent);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+/* Header Styles */
+.main-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+    background-color: rgba(var(--bg-primary-rgb), 0.8);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.brand-name {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 1.5rem;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.brand-accent {
+    color: var(--accent-primary);
+}
+
+.nav-links {
+    display: flex;
+    list-style: none;
+    gap: 2rem;
+    margin: 0;
+    padding: 0;
+}
+
+.nav-link {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+.nav-link:hover {
+    color: var(--accent-primary);
+}
+
+/* Footer Styles */
+.main-footer {
+    width: 100%;
+    background-color: rgba(var(--bg-secondary-rgb), 0.5);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--border-color);
+    padding: 3rem 0;
+    margin-top: auto;
+}
+
+.footer-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 3rem;
+    padding: 0 2rem;
+}
+
+.footer-logo {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.footer-brand-name {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.5rem;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.footer-brand-name span {
+    color: var(--accent-primary);
+}
+
+.footer-links {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+}
+
+.footer-contact h4,
+.footer-social h4 {
+    color: var(--text-primary);
+    margin-top: 0;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+}
+
+.footer-contact p {
+    color: var(--text-secondary);
+    margin: 0.5rem 0;
+    font-size: 0.9rem;
+}
+
+.social-icons {
+    display: flex;
+    gap: 1rem;
+}
+
+.social-icon {
+    color: var(--text-secondary);
+    transition: color 0.2s ease;
+}
+
+.social-icon:hover {
+    color: var(--accent-primary);
+}
+
+.footer-copyright {
+    grid-column: span 2;
+    text-align: center;
+    margin-top: 2rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.footer-copyright p {
+    margin: 0.5rem 0;
 }
 
 /***************  Preview Overrides */

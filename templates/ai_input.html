@@ -90,7 +90,7 @@
                 <ul class="nav-links">
                     <li><a href="/" class="nav-link">Home</a></li>
                     <li><a href="/#features" class="nav-link">Features</a></li>
-                    <li><a href="#about" class="nav-link">About</a></li>
+                    <li><a href="/#about" class="nav-link">About</a></li>
                     <li><a href="/#tech" class="nav-link">Technology</a></li>
                 </ul>
             </nav>
@@ -214,14 +214,25 @@
                         <div class="camera-controls">
                             <button id="capture-button" class="cta-button primary">Capture Face</button>
                         </div>
-                        <div class="2d-cube-preview" style="display: none;">
-                            2d cube preview flash after each capture for confirmation
+                        <div class="cube-face-preview" id="cube-face-preview" style="display: none;">
+                            <!-- 3x3 grid for face preview -->
+                            <div class="face-grid">
+                                <div class="face-cell" data-cell="0"></div>
+                                <div class="face-cell" data-cell="1"></div>
+                                <div class="face-cell" data-cell="2"></div>
+                                <div class="face-cell" data-cell="3"></div>
+                                <div class="face-cell" data-cell="4"></div>
+                                <div class="face-cell" data-cell="5"></div>
+                                <div class="face-cell" data-cell="6"></div>
+                                <div class="face-cell" data-cell="7"></div>
+                                <div class="face-cell" data-cell="8"></div>
+                            </div>
                         </div>
                     </div>
 
                     <div class="preview-container">
                         <div class="cube-preview-canvas" id="live-preview">
-                            Live preview will appear here
+                            <div id="cube-3d-preview-detection" class="cube-3d-preview"></div>
                         </div>
                         <div class="preview-info">
                             <div class="progress-container">
@@ -253,7 +264,73 @@
 
                 <div class="step-actions">
                     <button id="face-detection-back" class="cta-button secondary">Back to Color Selection</button>
-                    <button id="face-detection-next" class="cta-button primary" disabled>Next Face</button>
+                    <button id="face-detection-next" class="cta-button primary" disabled>Continue to Review</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Step 3: Cube Review -->
+        <div class="step-content" data-step="3" style="display: none;">
+            <div class="step-container">
+                <h2 class="step-title">Step 3: <span class="gradient-text">Cube Review</span></h2>
+                <p class="method-subtitle">Review your cube configuration before solving</p>
+                
+                <div class="cube-review-container">
+                    <div class="cube-review-3d">
+                        <div id="cube-3d-review" class="cube-3d-preview"></div>
+                        <h3 class="method-subtitle">3D Preview</h3>
+                    </div>
+                    
+                    <div class="cube-review-faces">
+                        <h3 class="method-subtitle">Detected Faces</h3>
+                        <div class="cube-faces-grid">
+                            <div class="cube-face-item" data-face="up">
+                                <h4>Top (U)</h4>
+                                <div class="face-grid review-grid" id="review-face-up"></div>
+                            </div>
+                            <div class="cube-face-item" data-face="right">
+                                <h4>Right (R)</h4>
+                                <div class="face-grid review-grid" id="review-face-right"></div>
+                            </div>
+                            <div class="cube-face-item" data-face="front">
+                                <h4>Front (F)</h4>
+                                <div class="face-grid review-grid" id="review-face-front"></div>
+                            </div>
+                            <div class="cube-face-item" data-face="down">
+                                <h4>Bottom (D)</h4>
+                                <div class="face-grid review-grid" id="review-face-down"></div>
+                            </div>
+                            <div class="cube-face-item" data-face="left">
+                                <h4>Left (L)</h4>
+                                <div class="face-grid review-grid" id="review-face-left"></div>
+                            </div>
+                            <div class="cube-face-item" data-face="back">
+                                <h4>Back (B)</h4>
+                                <div class="face-grid review-grid" id="review-face-back"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="cube-validation-container">
+                    <div class="validation-status" id="validation-status">
+                        <div class="validation-icon"><i class="fas fa-check-circle"></i></div>
+                        <div class="validation-message">Cube configuration is valid and solvable</div>
+                    </div>
+                    
+                    <div class="validation-details" id="validation-details">
+                        <ul>
+                            <li><i class="fas fa-check"></i> All faces detected</li>
+                            <li><i class="fas fa-check"></i> Each color appears exactly 9 times</li>
+                            <li><i class="fas fa-check"></i> Center pieces match standard configuration</li>
+                            <li><i class="fas fa-check"></i> Corner and edge pieces are valid</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="step-actions">
+                    <button id="review-back" class="cta-button secondary">Back to Face Detection</button>
+                    <button id="solve-button" class="cta-button primary">Solve Cube</button>
                 </div>
             </div>
         </div>
