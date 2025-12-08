@@ -3,8 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 import time
 
-from .models.requests import SolveRequest
-from .models.responses import SolveResponse, ScanResponse
+from .models.requests import SolveRequest, ValidateRequest
+from .models.responses import SolveResponse, ScanResponse, ValidateResponse
 from .services.solver_service import validate_cube_string, solve_cube
 from .services.vision_service import scan_cube_from_images
 
@@ -26,20 +26,26 @@ def health() -> dict:
     return {"status": "ok"}
 
 
-@app.post("/api/solve", response_model=SolveResponse)
-def solve(request: SolveRequest) -> SolveResponse:
+@app.post("/api/solve")
+def solve(request: SolveRequest) -> dict:
     is_valid, error_msg = validate_cube_string(request.cubeString)
     if not is_valid:
-        raise HTTPException(status_code=400, detail={"error": error_msg})
+        raise HTTPException(status_code=400, detail={"success": False, "error": error_msg})
 
     start = time.perf_counter()
     try:
         moves: List[str] = solve_cube(request.cubeString)
     except Exception as e:
-        raise HTTPException(status_code=422, detail={"error": f"Solver failed: {str(e)}"})
+        raise HTTPException(status_code=422, detail={"success": False, "error": f"Solver failed: {str(e)}"})
     elapsed_ms = int((time.perf_counter() - start) * 1000)
 
-    return SolveResponse(moves=moves, moveCount=len(moves), solveTimeMs=elapsed_ms)
+    return {
+        "success": True,
+        "solution": " ".join(moves),
+        "moves": moves,
+        "moveCount": len(moves),
+        "solveTimeMs": elapsed_ms,
+    }
 
 
 @app.post("/api/scan", response_model=ScanResponse)
@@ -71,4 +77,11 @@ async def scan(
         raise HTTPException(status_code=400, detail={"error": f"Invalid scanned cube: {error_msg}"})
 
     return ScanResponse(cubeString=cube_string, faces=faces_data)
+
+
+@app.post("/api/validate", response_model=ValidateResponse)
+def validate(req: ValidateRequest) -> ValidateResponse:
+    cube_str = req.cube_str or req.cubeString or ""
+    is_valid, error_msg = validate_cube_string(cube_str)
+    return ValidateResponse(valid=is_valid, error=None if is_valid else error_msg)
 

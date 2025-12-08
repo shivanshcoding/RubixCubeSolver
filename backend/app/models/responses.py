@@ -12,3 +12,7 @@ class ScanResponse(BaseModel):
     cubeString: str
     faces: Optional[Dict[str, List[List[str]]]] = None  # Optional per-face color/label grid
 
+
+class ValidateResponse(BaseModel):
+    valid: bool
+    error: Optional[str] = None
