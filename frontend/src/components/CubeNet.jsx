@@ -29,8 +29,7 @@ export default function CubeNet({ faces, setFaces, activeColor, palette }) {
 
   function faceGrid(face) {
     return (
-      <div key={face} className="p-3">
-        <div className="mb-2 font-medium">Face {face}</div>
+      <div key={face} className="p-1">
         <div className="grid grid-cols-3 gap-1">
           {faces[face].map((row, ri) =>
             row.map((cell, ci) => (
@@ -50,8 +49,16 @@ export default function CubeNet({ faces, setFaces, activeColor, palette }) {
 
   return (
     <div>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {FACE_NAMES.map((f) => faceGrid(f))}
+      <div
+        className="inline-grid gap-2"
+        style={{ gridTemplateColumns: "repeat(4, max-content)", gridTemplateRows: "repeat(3, max-content)" }}
+      >
+        <div className="col-start-2 row-start-1">{faceGrid("U")}</div>
+        <div className="col-start-1 row-start-2">{faceGrid("L")}</div>
+        <div className="col-start-2 row-start-2">{faceGrid("F")}</div>
+        <div className="col-start-3 row-start-2">{faceGrid("R")}</div>
+        <div className="col-start-4 row-start-2">{faceGrid("B")}</div>
+        <div className="col-start-2 row-start-3">{faceGrid("D")}</div>
       </div>
       <div className="mt-4 grid grid-cols-6 gap-2 text-center text-xs">
         {FACE_NAMES.map((f) => (

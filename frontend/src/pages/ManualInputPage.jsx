@@ -57,6 +57,7 @@ export default function ManualInputPage() {
   const [activeColor, setActiveColor] = useState("U");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [validated, setValidated] = useState(false);
 
   const counts = useMemo(() => {
     const c = { U: 0, R: 0, F: 0, D: 0, L: 0, B: 0 };
@@ -83,10 +84,7 @@ export default function ManualInputPage() {
 
   async function onSolve() {
     setError("");
-    if (!isCountsValid()) {
-      setError("Each face letter must appear exactly 9 times.");
-      return;
-    }
+    if (!validated) return;
     const cubeString = buildCubeString();
     setLoading(true);
     try {
@@ -97,6 +95,20 @@ export default function ManualInputPage() {
     } finally {
       setLoading(false);
     }
+  }
+  function onValidate() {
+    setError("");
+    if (!isCountsValid()) {
+      setValidated(false);
+      setError("Each face letter must appear exactly 9 times.");
+      return;
+    }
+    setValidated(true);
+  }
+  function onReset() {
+    setFaces(DEFAULT_FACE_GRIDS);
+    setError("");
+    setValidated(false);
   }
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -210,8 +222,8 @@ export default function ManualInputPage() {
                 <b>valid cube</b> can be submitted.
               </li>
               <li>
-                Click <b>Submit Cube</b> to solve, or <b>Reset</b> to start
-                over.
+                Click <b>Validate Cube</b> first; when valid, <b>Solve Cube</b>
+                appears. Use <b>Reset</b> to start over.
               </li>
             </ol>
           </div>
@@ -246,12 +258,28 @@ export default function ManualInputPage() {
 
           {error && <div className="text-red-600 text-sm">{error}</div>}
 
-          <div className="mt-2">
+          <div className="mt-2 flex gap-2 items-center">
+            {!validated && (
+              <button
+                onClick={onValidate}
+                className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+              >
+                Validate Cube
+              </button>
+            )}
+            {validated && (
+              <button
+                onClick={onSolve}
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+              >
+                Solve Cube
+              </button>
+            )}
             <button
-              onClick={onSolve}
-              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+              onClick={onReset}
+              className="bg-gray-200 text-gray-900 px-4 py-2 rounded hover:bg-gray-300 border"
             >
-              Solve Cube
+              Reset
             </button>
           </div>
         </>
