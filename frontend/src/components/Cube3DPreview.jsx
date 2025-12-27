@@ -11,7 +11,7 @@ export default function Cube3D({ moves, faces, palette, state = "preview" }) {
 
   const colors = useMemo(() => {
     const out = {};
-    palette.forEach(p => (out[p.face] = p.color));
+    palette.forEach((p) => (out[p.face] = p.color));
     return out;
   }, [palette]);
 
@@ -39,8 +39,9 @@ export default function Cube3D({ moves, faces, palette, state = "preview" }) {
     for (let x = -1; x <= 1; x++)
       for (let y = -1; y <= 1; y++)
         for (let z = -1; z <= 1; z++) {
-          const mats = Array.from({ length: 6 }, () =>
-            new THREE.MeshBasicMaterial({ color: "#232323" })
+          const mats = Array.from(
+            { length: 6 },
+            () => new THREE.MeshBasicMaterial({ color: "#232323" })
           );
           const cubelet = new THREE.Mesh(
             new THREE.BoxGeometry(0.9, 0.9, 0.9),
@@ -63,8 +64,12 @@ export default function Cube3D({ moves, faces, palette, state = "preview" }) {
 
     return () => {
       cancelAnimationFrame(frame);
-      renderer.dispose();
-      mountRef.current.removeChild(renderer.domElement);
+      renderer.dispose?.();
+      if (mountRef.current && renderer.domElement) {
+        try {
+          mountRef.current.removeChild(renderer.domElement);
+        } catch {}
+      }
     };
   }, []);
 

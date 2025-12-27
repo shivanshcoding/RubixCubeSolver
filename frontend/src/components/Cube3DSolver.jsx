@@ -9,7 +9,7 @@ export default function Cube3DSolver({ moves = [], faces, palette }) {
 
   const colors = useMemo(() => {
     const out = {};
-    palette.forEach(p => (out[p.face] = p.color));
+    palette.forEach((p) => (out[p.face] = p.color));
     return out;
   }, [palette]);
 
@@ -53,7 +53,7 @@ export default function Cube3DSolver({ moves = [], faces, palette }) {
     function animate() {
       if (frame < total) {
         const delta = angle / total;
-        slice.forEach(c => {
+        slice.forEach((c) => {
           c.mesh.rotateOnWorldAxis(vec, delta);
           c.mesh.position.applyAxisAngle(vec, delta);
         });
@@ -85,8 +85,13 @@ export default function Cube3DSolver({ moves = [], faces, palette }) {
     for (let x = -1; x <= 1; x++)
       for (let y = -1; y <= 1; y++)
         for (let z = -1; z <= 1; z++) {
-          const mats = [...Array(6)].map(() => new THREE.MeshBasicMaterial({ color: "#232323" }));
-          const cubelet = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9), mats);
+          const mats = [...Array(6)].map(
+            () => new THREE.MeshBasicMaterial({ color: "#232323" })
+          );
+          const cubelet = new THREE.Mesh(
+            new THREE.BoxGeometry(0.9, 0.9, 0.9),
+            mats
+          );
           cubelet.position.set(x, y, z);
           scene.add(cubelet);
           cubelets.push({ mesh: cubelet });
@@ -97,8 +102,12 @@ export default function Cube3DSolver({ moves = [], faces, palette }) {
     renderer.setAnimationLoop(render);
 
     return () => {
-      renderer.dispose();
-      if (renderer.domElement) mountRef.current.removeChild(renderer.domElement);
+      renderer.dispose?.();
+      if (mountRef.current && renderer.domElement) {
+        try {
+          mountRef.current.removeChild(renderer.domElement);
+        } catch {}
+      }
     };
   }, []);
 
@@ -106,8 +115,8 @@ export default function Cube3DSolver({ moves = [], faces, palette }) {
     if (moves[moveIndex]) applyMoveTo3DCube(moves[moveIndex]);
   }, [moveIndex]);
 
-  const next = () => setMoveIndex(i => Math.min(i + 1, moves.length - 1));
-  const prev = () => setMoveIndex(i => Math.max(i - 1, 0));
+  const next = () => setMoveIndex((i) => Math.min(i + 1, moves.length - 1));
+  const prev = () => setMoveIndex((i) => Math.max(i - 1, 0));
   const reset = () => window.location.reload(); // simplest reset
 
   return (
@@ -115,9 +124,15 @@ export default function Cube3DSolver({ moves = [], faces, palette }) {
       <div ref={mountRef} className="w-full h-full" />
 
       <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-2 bg-white/80 p-2 rounded text-xs">
-        <button onClick={prev} className="px-2 border rounded">Prev</button>
-        <button onClick={next} className="px-2 border rounded">Next</button>
-        <button onClick={reset} className="px-2 border rounded">Reset</button>
+        <button onClick={prev} className="px-2 border rounded">
+          Prev
+        </button>
+        <button onClick={next} className="px-2 border rounded">
+          Next
+        </button>
+        <button onClick={reset} className="px-2 border rounded">
+          Reset
+        </button>
       </div>
     </div>
   );
