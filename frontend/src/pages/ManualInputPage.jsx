@@ -72,30 +72,34 @@ export default function ManualInputPage() {
   function isCountsValid() {
     return FACE_NAMES.every((f) => counts[f] === 9);
   }
-
-  function flattenFace(faceGrid) {
-    return faceGrid.flat();
-  }
-
-  function buildCubeString() {
-    const order = ["U", "R", "F", "D", "L", "B"];
-    return order.map((f) => flattenFace(faces[f]).join("")).join("");
-  }
-
   async function onSolve() {
     setError("");
-    if (!validated) return;
-    const cubeString = buildCubeString();
     setLoading(true);
+
     try {
+      // Build cubeString directly here
+      const order = ["U", "R", "F", "D", "L", "B"];
+      const cubeString = order
+        .map((face) => faces[face].flat().join(""))
+        .join("");
+
       const res = await solveCube(cubeString);
-      navigate("/solution", { state: { cubeString, ...res } });
+
+      navigate("/solution", {
+        state: {
+          cubeString,
+          ...res,
+        },
+      });
     } catch (e) {
-      setError(e?.response?.data?.detail?.error || "Failed to solve.");
+      const msg =
+        e?.response?.data?.detail?.error || e?.message || "Failed to solve.";
+      setError(msg);
     } finally {
       setLoading(false);
     }
   }
+
   function onValidate() {
     setError("");
     if (!isCountsValid()) {
@@ -103,8 +107,10 @@ export default function ManualInputPage() {
       setError("Each face letter must appear exactly 9 times.");
       return;
     }
+    onSolve();
     setValidated(true);
   }
+
   function onReset() {
     setFaces(DEFAULT_FACE_GRIDS);
     setError("");
@@ -252,7 +258,7 @@ export default function ManualInputPage() {
               />
             </div>
             <div className="cube3d-preview">
-              <Cube3D faces={faces} palette={palette} />
+              <Cube3D faces={faces} palette={palette} state={"preview"} />
             </div>
           </div>
 

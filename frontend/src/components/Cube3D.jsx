@@ -1,116 +1,98 @@
-import { Canvas, useFrame } from '@react-three/fiber'
-import { useRef, useEffect, useState, useMemo } from 'react'
-import * as THREE from 'three'
+"use client";
+import * as THREE from "three";
+import { useEffect, useRef, useMemo } from "react";
 
-function AnimatedCube({ currentMove, speed = 1, children }) {
-  const group = useRef()
-  const [target, setTarget] = useState([0, 0, 0])
+export default function Cube3D({ moves, faces, palette, state = "preview" }) {
+  const mountRef = useRef(null);
+  const sceneRef = useRef(null);
+  const rendererRef = useRef(null);
+  const cameraRef = useRef(null);
+  const cubeletsRef = useRef(null);
+
+  const colors = useMemo(() => {
+    const out = {};
+    palette.forEach(p => (out[p.face] = p.color));
+    return out;
+  }, [palette]);
 
   useEffect(() => {
-    if (!currentMove) return
-    const m = currentMove
-    let axis = [0, 0, 0]
-    let angle = Math.PI / 2
-    if (m.endsWith("2")) angle = Math.PI
-    if (m.endsWith("'")) angle = -angle
-    const base = m[0]
-    switch (base) {
-      case 'U': axis = [0, 1, 0]; break
-      case 'D': axis = [0, -1, 0]; break
-      case 'R': axis = [1, 0, 0]; break
-      case 'L': axis = [-1, 0, 0]; break
-      case 'F': axis = [0, 0, -1]; break
-      case 'B': axis = [0, 0, 1]; break
-      default: axis = [0, 0, 0]
-    }
-    setTarget(([x, y, z]) => [x + axis[0] * angle, y + axis[1] * angle, z + axis[2] * angle])
-  }, [currentMove])
+    if (!mountRef.current) return;
 
-  useFrame((_, delta) => {
-    const g = group.current
-    if (!g) return
-    const step = delta * 2 * speed
-    // ease rotation towards target
-    g.rotation.x += Math.sign(target[0] - g.rotation.x) * Math.min(Math.abs(target[0] - g.rotation.x), step)
-    g.rotation.y += Math.sign(target[1] - g.rotation.y) * Math.min(Math.abs(target[1] - g.rotation.y), step)
-    g.rotation.z += Math.sign(target[2] - g.rotation.z) * Math.min(Math.abs(target[2] - g.rotation.z), step)
-  })
+    const width = mountRef.current.clientWidth;
+    const height = mountRef.current.clientHeight;
 
-  return (
-    <group ref={group}>
-      {/* base cube */}
-      <mesh>
-        <boxGeometry args={[2, 2, 2]} />
-        <meshStandardMaterial color="#1f2937" />
-      </mesh>
-      {children}
-    </group>
-  )
-}
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color("#111");
+    sceneRef.current = scene;
 
-export default function Cube3D({ moveIndex = 0, moves = [], speed = 1, faces, palette }) {
-  const currentMove = moves[moveIndex] || null
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+    camera.position.set(5, 5, 5);
+    camera.lookAt(0, 0, 0);
+    cameraRef.current = camera;
 
-  const paletteMap = useMemo(() => {
-    const map = { U: '#ffffff', R: '#ff0000', F: '#00ff00', D: '#ffff00', L: '#ffa500', B: '#0000ff' }
-    if (Array.isArray(palette)) {
-      for (const p of palette) map[p.face] = p.color
-    }
-    return map
-  }, [palette])
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(width, height);
+    rendererRef.current = renderer;
+    mountRef.current.appendChild(renderer.domElement);
 
-  const tiles = useMemo(() => {
-    if (!faces) return []
-    const t = [-0.6, 0, 0.6]
-    const entries = []
-    const makeTile = (pos, rot, color, key) => ({ pos, rot, color, key })
-    // U: y=+1.01, plane XZ
-    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
-      const color = paletteMap[faces.U[r][c]]
-      entries.push(makeTile([t[c], 1.01, -t[r]], [-Math.PI/2, 0, 0], color, `U-${r}-${c}`))
+    const cubelets = [];
+    for (let x = -1; x <= 1; x++)
+      for (let y = -1; y <= 1; y++)
+        for (let z = -1; z <= 1; z++) {
+          const mats = Array.from({ length: 6 }, () =>
+            new THREE.MeshBasicMaterial({ color: "#232323" })
+          );
+          const cubelet = new THREE.Mesh(
+            new THREE.BoxGeometry(0.9, 0.9, 0.9),
+            mats
+          );
+          cubelet.position.set(x, y, z);
+          scene.add(cubelet);
+          cubelets.push({ mesh: cubelet, x, y, z });
+        }
+
+    cubeletsRef.current = cubelets;
+
+    let frame;
+    const animate = () => {
+      frame = requestAnimationFrame(animate);
+      if (state === "preview") scene.rotation.y += 0.009;
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    return () => {
+      cancelAnimationFrame(frame);
+      renderer.dispose();
+      mountRef.current.removeChild(renderer.domElement);
+    };
+  }, []);
+
+  // update colors on live input
+  useEffect(() => {
+    if (!faces || !palette) return;
+    const cubelets = cubeletsRef.current;
+    if (!cubelets) return;
+
+    for (const c of cubelets) {
+      const { mesh, x, y, z } = c;
+      const m = mesh.material;
+
+      for (let i = 0; i < 6; i++) m[i].color.set("#232323");
+
+      if (y === 1) m[2].color.set(colors[faces.U[z + 1][x + 1]]);
+      if (y === -1) m[3].color.set(colors[faces.D[2 - (z + 1)][x + 1]]);
+      if (x === 1) m[0].color.set(colors[faces.R[2 - (y + 1)][2 - (z + 1)]]);
+      if (x === -1) m[1].color.set(colors[faces.L[2 - (y + 1)][z + 1]]);
+      if (z === 1) m[4].color.set(colors[faces.F[2 - (y + 1)][x + 1]]);
+      if (z === -1) m[5].color.set(colors[faces.B[2 - (y + 1)][2 - (x + 1)]]);
     }
-    // D: y=-1.01, plane XZ
-    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
-      const color = paletteMap[faces.D[r][c]]
-      entries.push(makeTile([t[c], -1.01, t[r]], [Math.PI/2, 0, 0], color, `D-${r}-${c}`))
-    }
-    // F: z=-1.01, plane XY
-    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
-      const color = paletteMap[faces.F[r][c]]
-      entries.push(makeTile([t[c], t[2 - r], -1.01], [0, Math.PI, 0], color, `F-${r}-${c}`))
-    }
-    // B: z=+1.01, plane XY
-    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
-      const color = paletteMap[faces.B[r][c]]
-      entries.push(makeTile([-t[c], t[2 - r], 1.01], [0, 0, 0], color, `B-${r}-${c}`))
-    }
-    // R: x=+1.01, plane YZ
-    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
-      const color = paletteMap[faces.R[r][c]]
-      entries.push(makeTile([1.01, t[2 - r], t[c]], [0, -Math.PI/2, 0], color, `R-${r}-${c}`))
-    }
-    // L: x=-1.01, plane YZ
-    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
-      const color = paletteMap[faces.L[r][c]]
-      entries.push(makeTile([-1.01, t[2 - r], -t[c]], [0, Math.PI/2, 0], color, `L-${r}-${c}`))
-    }
-    return entries
-  }, [faces, paletteMap])
+  }, [faces, colors]);
 
   return (
-    <div className="w-full h-80 bg-white rounded border">
-      <Canvas camera={{ position: [4, 4, 4] }}>
-        <ambientLight intensity={0.7} />
-        <pointLight position={[10, 10, 10]} />
-        <AnimatedCube currentMove={currentMove} speed={speed}>
-          {tiles.map(({ pos, rot, color, key }) => (
-            <mesh key={key} position={pos} rotation={rot}>
-              <planeGeometry args={[0.62, 0.62]} />
-              <meshStandardMaterial color={color} side={THREE.DoubleSide} />
-            </mesh>
-          ))}
-        </AnimatedCube>
-      </Canvas>
-    </div>
-  )
+    <div
+      ref={mountRef}
+      style={{ width: "250px", height: "250px", border: "1px solid #333" }}
+    />
+  );
 }
