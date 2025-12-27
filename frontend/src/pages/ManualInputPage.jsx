@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import CubeNet from "../components/CubeNet.jsx";
 import { solveCube, validateCube } from "../services/api.js";
 import { useNavigate } from "react-router-dom";
-import Cube3D from "../components/Cube3D.jsx";
+import Cube3DPreview from "../components/Cube3DPreview.jsx";
 
 const FACE_NAMES = ["U", "R", "F", "D", "L", "B"];
 
@@ -278,7 +278,7 @@ async function onSolve() {
               />
             </div>
             <div className="cube3d-preview">
-              <Cube3D faces={faces} palette={palette} state={"preview"} />
+              <Cube3DPreview faces={faces} palette={palette} />
             </div>
           </div>
 

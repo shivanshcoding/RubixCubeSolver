@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import Cube3D from "../components/Cube3D.jsx";
+import Cube3DSolver from "../components/Cube3DSolver.jsx";
 
 export default function SolutionPage() {
   const { state } = useLocation();
@@ -29,11 +29,10 @@ export default function SolutionPage() {
 
       <div className="grid lg:grid-cols-2 gap-6 items-start">
         {/* Cube manages controls + move playback by itself */}
-        <Cube3D
+        <Cube3DSolver
           faces={faces}
           palette={palette}
           moves={moves}
-          state="solver"
         />
 
         <div className="bg-white p-4 border rounded">
