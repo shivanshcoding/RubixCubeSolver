@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import CubeNet from "../components/CubeNet.jsx";
-import LoadingOverlay from "../components/LoadingOverlay.jsx";
 import { solveCube, validateCube } from "../services/api.js";
 import { useNavigate } from "react-router-dom";
 import Cube3D from "../components/Cube3D.jsx";
@@ -96,36 +95,41 @@ export default function ManualInputPage() {
     setValidated(true);
   }
 
-  async function onSolve() {
-    if (!validated) {
-      setError("Cube must be validated before solving.");
-      return;
-    }
-
-    setError("");
-    setLoading(true);
-
-    try {
-      const cubeString = ["U", "R", "F", "D", "L", "B"]
-        .map((face) => faces[face].flat().join(""))
-        .join("");
-
-      const res = await solveCube(cubeString);
-
-      navigate("/solution", {
-        state: {
-          cubeString,
-          ...res,
-        },
-      });
-    } catch (e) {
-      const msg =
-        e?.response?.data?.detail?.error || e?.message || "Failed to solve.";
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
+async function onSolve() {
+  if (!validated) {
+    setError("Cube must be validated before solving.");
+    return;
   }
+
+  setError("");
+  setLoading(true);
+
+  try {
+    const cubeString = ["U","R","F","D","L","B"]
+      .map((face) => faces[face].flat().join(""))
+      .join("");
+
+    const res = await solveCube(cubeString); // backend response
+
+    navigate("/solution", {
+      state: {
+        faces,
+        palette,
+        res,
+      },
+    });
+
+  } catch (e) {
+    const msg =
+      e?.response?.data?.detail?.error ||
+      e?.message ||
+      "Failed to solve.";
+    setError(msg);
+  } finally {
+    setLoading(false);
+  }
+}
+
 
   function onReset() {
     setFaces(DEFAULT_FACE_GRIDS);
@@ -307,7 +311,6 @@ export default function ManualInputPage() {
         </>
       ) : null}
 
-      <LoadingOverlay visible={loading} messages={["Computing solution"]} />
     </div>
   );
 }

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import LoadingOverlay from '../components/LoadingOverlay.jsx'
 import { scanFaces, solveCube } from '../services/api.js'
 import { useNavigate } from 'react-router-dom'
 

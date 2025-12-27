@@ -96,3 +96,7 @@ export default function Cube3D({ moves, faces, palette, state = "preview" }) {
     />
   );
 }
+
+
+
+
