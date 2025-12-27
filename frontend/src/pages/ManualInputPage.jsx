@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import CubeNet from "../components/CubeNet.jsx";
 import LoadingOverlay from "../components/LoadingOverlay.jsx";
-import { solveCube } from "../services/api.js";
+import { solveCube, validateCube } from "../services/api.js";
 import { useNavigate } from "react-router-dom";
 import Cube3D from "../components/Cube3D.jsx";
 
@@ -72,14 +72,41 @@ export default function ManualInputPage() {
   function isCountsValid() {
     return FACE_NAMES.every((f) => counts[f] === 9);
   }
+  async function onValidate() {
+    setError("");
+
+    if (!isCountsValid()) {
+      setValidated(false);
+      setError("Each face letter must appear exactly 9 times.");
+      return;
+    }
+
+    const cubeString = ["U", "R", "F", "D", "L", "B"]
+      .map((face) => faces[face].flat().join(""))
+      .join("");
+
+    const result = await validateCube(cubeString);
+
+    if (!result.valid) {
+      setValidated(false);
+      setError(result.error);
+      return;
+    }
+
+    setValidated(true);
+  }
+
   async function onSolve() {
+    if (!validated) {
+      setError("Cube must be validated before solving.");
+      return;
+    }
+
     setError("");
     setLoading(true);
 
     try {
-      // Build cubeString directly here
-      const order = ["U", "R", "F", "D", "L", "B"];
-      const cubeString = order
+      const cubeString = ["U", "R", "F", "D", "L", "B"]
         .map((face) => faces[face].flat().join(""))
         .join("");
 
@@ -98,17 +125,6 @@ export default function ManualInputPage() {
     } finally {
       setLoading(false);
     }
-  }
-
-  function onValidate() {
-    setError("");
-    if (!isCountsValid()) {
-      setValidated(false);
-      setError("Each face letter must appear exactly 9 times.");
-      return;
-    }
-    onSolve();
-    setValidated(true);
   }
 
   function onReset() {

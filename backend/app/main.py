@@ -78,10 +78,3 @@ async def scan(
 
     return ScanResponse(cubeString=cube_string, faces=faces_data)
 
-
-@app.post("/api/validate", response_model=ValidateResponse)
-def validate(req: ValidateRequest) -> ValidateResponse:
-    cube_str = req.cube_str or req.cubeString or ""
-    is_valid, error_msg = validate_cube_string(cube_str)
-    return ValidateResponse(valid=is_valid, error=None if is_valid else error_msg)
-
