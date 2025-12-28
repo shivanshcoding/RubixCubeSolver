@@ -27,12 +27,18 @@ export default function Cube3DSolver({ moves = [], faces, palette }) {
     ].map((face) => face.map((row) => [...row]));
   }, [faces]);
 
+    useEffect(() => {
+    console.log("moves:", moves);
+    console.log(faces);
+  }, [faces]);
+
+
   // Parse "R", "R'", "R2"
   function parseMove(move) {
     const face = move[0];
-    let direction = -1;
+    let direction = 1;
     let times = 1;
-    if (move.includes("'")) direction = 1;
+    if (move.includes("'")) direction = -1;
     if (move.includes("2")) times = 2;
     return { face, direction, times };
   }
@@ -40,7 +46,7 @@ export default function Cube3DSolver({ moves = [], faces, palette }) {
   // Reverse move
   function invertMove(move) {
     const { face, direction, times } = parseMove(move);
-    return face + (times === 2 ? "2" : direction === -1 ? "'" : "");
+    return face + (times === 2 ? "2" : direction === 1 ? "'" : "");
   }
 
   // Get slice visually using mesh.position (just like Code-1)
@@ -73,33 +79,6 @@ export default function Cube3DSolver({ moves = [], faces, palette }) {
         for (let j = 0; j < 3; j++) S[F][2 - j][i] = temp[i][j];
     }
   }
-
-  // Repaint stickers based on mesh.position
-  //   function repaint() {
-  //     const S = cubeStateRef.current;
-
-  //     cubeletsRef.current.forEach(c => {
-  //       const m = c.mesh.material;
-  //       const pos = c.mesh.position;
-
-  //       for (let f=0; f<6; f++) m[f].color.set("#232323");
-
-  //       if (pos.y > 0.9)
-  //         m[2].color.set(COLORS[S[0][Math.round(pos.z+1)][Math.round(pos.x+1)]]);
-  //       if (pos.y < -0.9)
-  //         m[3].color.set(COLORS[S[3][2-Math.round(pos.z+1)][Math.round(pos.x+1)]]);
-
-  //       if (pos.x > 0.9)
-  //         m[0].color.set(COLORS[S[1][2-Math.round(pos.y+1)][2-Math.round(pos.z+1)]]);
-  //       if (pos.x < -0.9)
-  //         m[1].color.set(COLORS[S[4][2-Math.round(pos.y+1)][Math.round(pos.z+1)]]);
-
-  //       if (pos.z > 0.9)
-  //         m[4].color.set(COLORS[S[2][2-Math.round(pos.y+1)][Math.round(pos.x+1)]]);
-  //       if (pos.z < -0.9)
-  //         m[5].color.set(COLORS[S[5][2-Math.round(pos.y+1)][2-Math.round(pos.x+1)]]);
-  //     });
-  //   }
 
 function repaint() {
   const S = cubeStateRef.current;
