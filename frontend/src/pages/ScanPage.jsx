@@ -120,69 +120,80 @@ export default function ScanPage() {
             ))}
           </div>
 
-          {/* 👇 INSERTED BLOCK: Preview in 2D NET layout */}
           {Object.values(files).some((f) => f) && (
-            <div className="mt-6">
-              <h3 className="text-lg font-semibold mb-2">
-                Preview (Uploaded Images)
+            <>
+              <h3 className="text-lg font-semibold mt-4">
+                Uploaded Faces Preview
               </h3>
 
-              <div className="flex flex-col items-center space-y-2">
+              <div className="grid grid-cols-4 gap-2 place-items-center my-6 w-fit mx-auto">
                 {/* U */}
-                <div className="flex justify-center">
+                <div></div>
+                <div>
                   {files.U && (
                     <img
                       src={URL.createObjectURL(files.U)}
                       alt="U"
-                      className="w-28 h-28 object-cover border rounded"
+                      className=" w-32 h-32 object-cover border rounded face-img"
                     />
                   )}
                 </div>
+                <div></div>
+                <div></div>
 
                 {/* L F R B */}
-                <div className="flex space-x-2">
+                <div>
                   {files.L && (
                     <img
                       src={URL.createObjectURL(files.L)}
                       alt="L"
-                      className="w-28 h-28 object-cover border rounded"
+                      className="w-32 h-32 object-cover border rounded face-img"
                     />
                   )}
+                </div>
+                <div>
                   {files.F && (
                     <img
                       src={URL.createObjectURL(files.F)}
                       alt="F"
-                      className="w-28 h-28 object-cover border rounded"
+                      className="w-32 h-32 object-cover border rounded face-img"
                     />
                   )}
+                </div>
+                <div>
                   {files.R && (
                     <img
                       src={URL.createObjectURL(files.R)}
                       alt="R"
-                      className="w-28 h-28 object-cover border rounded"
+                      className="w-32 h-32 object-cover border rounded face-img"
                     />
                   )}
+                </div>
+                <div>
                   {files.B && (
                     <img
                       src={URL.createObjectURL(files.B)}
                       alt="B"
-                      className="w-28 h-28 object-cover border rounded"
+                      className="w-32 h-32 object-cover border rounded face-img"
                     />
                   )}
                 </div>
 
                 {/* D */}
-                <div className="flex justify-center">
+                <div></div>
+                <div>
                   {files.D && (
                     <img
                       src={URL.createObjectURL(files.D)}
                       alt="D"
-                      className="w-28 h-28 object-cover border rounded"
+                      className="w-32 h-32 object-cover border rounded face-img"
                     />
                   )}
                 </div>
+                <div></div>
+                <div></div>
               </div>
-            </div>
+            </>
           )}
 
           {/* Scan Button */}
