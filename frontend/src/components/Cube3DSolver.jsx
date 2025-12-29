@@ -1,232 +1,161 @@
 "use client";
 import * as THREE from "three";
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState } from "react";
 
-export default function Cube3DSolver({ moves = [], faces, palette }) {
+export default function CubeSolutionViewer({ faces, palette, moves }) {
   const mountRef = useRef(null);
+  const rendererRef = useRef(null);
+  const sceneRef = useRef(null);
+  const cameraRef = useRef(null);
   const cubeletsRef = useRef([]);
-  const cubeStateRef = useRef(null);
-  const [moveIndex, setMoveIndex] = useState(-1);
+  const [idx, setIdx] = useState(-1);
 
-  // COLORS: map {U:"#fff", R:"#f00"...}
-  const COLORS = useMemo(() => {
-    const out = {};
-    palette.forEach((p) => (out[p.face] = p.color));
-    return out;
-  }, [palette]);
+  const getColor = (f) => palette.find(p => p.face === f)?.color ?? "#222";
 
-  // Build cubeState from faces
-  useEffect(() => {
-    cubeStateRef.current = [
-      faces.U,
-      faces.R,
-      faces.F,
-      faces.D,
-      faces.L,
-      faces.B,
-    ].map((face) => face.map((row) => [...row]));
-  }, [faces]);
-
-    useEffect(() => {
-    console.log("moves:", moves);
-    console.log(faces);
-  }, [faces]);
-
-
-  // Parse "R", "R'", "R2"
-  function parseMove(move) {
-    const face = move[0];
-    let direction = 1;
-    let times = 1;
-    if (move.includes("'")) direction = -1;
-    if (move.includes("2")) times = 2;
-    return { face, direction, times };
-  }
-
-  // Reverse move
-  function invertMove(move) {
-    const { face, direction, times } = parseMove(move);
-    return face + (times === 2 ? "2" : direction === 1 ? "'" : "");
-  }
-
-  // Get slice visually using mesh.position (just like Code-1)
-  function getFaceCubelets(face) {
-    let out = [];
-    for (const c of cubeletsRef.current) {
-      const pos = c.mesh.position;
-      if (face === "U" && Math.abs(pos.y - 1.01) < 0.1) out.push(c);
-      if (face === "D" && Math.abs(pos.y + 1.01) < 0.1) out.push(c);
-      if (face === "F" && Math.abs(pos.z - 1.01) < 0.1) out.push(c);
-      if (face === "B" && Math.abs(pos.z + 1.01) < 0.1) out.push(c);
-      if (face === "L" && Math.abs(pos.x + 1.01) < 0.1) out.push(c);
-      if (face === "R" && Math.abs(pos.x - 1.01) < 0.1) out.push(c);
-    }
-    return out;
-  }
-
-  // Update sticker state (like Code-1)
-  function rotateFaceInCubeState(face, direction) {
-    const F = { U: 0, R: 1, F: 2, D: 3, L: 4, B: 5 }[face];
-    const S = cubeStateRef.current;
-
-    // Rotate the affected face 3x3
-    const temp = S[F].map((r) => [...r]);
-    if (direction === 1) {
-      for (let i = 0; i < 3; i++)
-        for (let j = 0; j < 3; j++) S[F][j][2 - i] = temp[i][j];
-    } else {
-      for (let i = 0; i < 3; i++)
-        for (let j = 0; j < 3; j++) S[F][2 - j][i] = temp[i][j];
-    }
-  }
-
-function repaint() {
-  const S = cubeStateRef.current;
-
-  cubeletsRef.current.forEach(c => {
-    const m = c.mesh.material;
-    const { x, y, z } = c; // USE STORED VALUES LIKE CODE-1
-
-    for (let i=0;i<6;i++) m[i].color.set("#232323");
-
-    if (y === 1)  m[2].color.set(COLORS[S[0][z+1][x+1]]);
-    if (y === -1) m[3].color.set(COLORS[S[3][2-(z+1)][x+1]]);
-    if (x === 1)  m[0].color.set(COLORS[S[1][2-(y+1)][2-(z+1)]]);
-    if (x === -1) m[1].color.set(COLORS[S[4][2-(y+1)][z+1]]);
-    if (z === 1)  m[4].color.set(COLORS[S[2][2-(y+1)][x+1]]);
-    if (z === -1) m[5].color.set(COLORS[S[5][2-(y+1)][2-(x+1)]]);
-  });
-}
-
-  // Animation identical to Code-1
-  function applyMove(move) {
-    const { face, direction, times } = parseMove(move);
-    const AX = {
-      U: [0, 1, 0],
-      D: [0, -1, 0],
-      F: [0, 0, 1],
-      B: [0, 0, -1],
-      L: [-1, 0, 0],
-      R: [1, 0, 0],
-    };
-
-    const slice = getFaceCubelets(face);
-    const axis = new THREE.Vector3(...AX[face]);
-    let frame = 0;
-
-    function animateTurn() {
-      if (frame < 20) {
-        const a = ((Math.PI / 2) * direction) / 20;
-        slice.forEach((c) => {
-          c.mesh.rotateOnWorldAxis(axis, a);
-          c.mesh.position.applyAxisAngle(axis, a);
-        });
-        frame++;
-        requestAnimationFrame(animateTurn);
-      } else {
-        slice.forEach((c) => {
-          c.mesh.position.set(
-            Math.round(c.mesh.position.x * 1000) / 1000,
-            Math.round(c.mesh.position.y * 1000) / 1000,
-            Math.round(c.mesh.position.z * 1000) / 1000
-          );
-        });
-
-        rotateFaceInCubeState(face, direction);
-        repaint();
-
-        if (times === 2) applyMove(face); // R2, U2, etc
-      }
-    }
-
-    animateTurn();
-  }
-
-  const next = () => {
-    if (moveIndex < moves.length - 1) {
-      applyMove(moves[moveIndex + 1]);
-      setMoveIndex(moveIndex + 1);
-    }
-  };
-
-  const prev = () => {
-    if (moveIndex >= 0) {
-      applyMove(invertMove(moves[moveIndex]));
-      setMoveIndex(moveIndex - 1);
-    }
-  };
-
-  const reset = () => {
-    setMoveIndex(-1);
-    cubeStateRef.current = [
-      faces.U,
-      faces.R,
-      faces.F,
-      faces.D,
-      faces.L,
-      faces.B,
-    ].map((f) => f.map((r) => [...r]));
-
-    cubeletsRef.current.forEach((c) => {
-      c.mesh.rotation.set(0, 0, 0);
-      c.mesh.position.set(c.x, c.y, c.z);
-    });
-
-    repaint();
-  };
-
-  // Mount scene
-  useEffect(() => {
-    if (!mountRef.current) return;
-    const W = mountRef.current.clientWidth;
-    const H = mountRef.current.clientHeight;
-
+  const initScene = () => {
+    const w = 350, h = 350;
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+    renderer.setSize(w, h);
+    renderer.setClearColor(0x181818, 0);
+    mountRef.current.innerHTML = "";
+    mountRef.current.appendChild(renderer.domElement);
+
     camera.position.set(5, 6, 7);
     camera.lookAt(0, 0, 0);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(W, H);
-    mountRef.current.appendChild(renderer.domElement);
-
     scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-    const dl = new THREE.DirectionalLight(0xffffff, 0.4);
-    dl.position.set(8, 12, 10);
-    scene.add(dl);
+    const d = new THREE.DirectionalLight(0xffffff, 0.5);
+    d.position.set(6, 8, 7);
+    scene.add(d);
 
-    const sz = 0.95,
-      gap = 0.06;
-    const cubelets = [];
-    for (let x = -1; x <= 1; x++)
-      for (let y = -1; y <= 1; y++)
+    cubeletsRef.current = [];
+    const size = 0.95, gap = 0.06;
+
+    for (let x = -1; x <= 1; x++) {
+      for (let y = -1; y <= 1; y++) {
         for (let z = -1; z <= 1; z++) {
-          const geo = new THREE.BoxGeometry(sz, sz, sz);
-          const mats = [...Array(6)].map(
-            () => new THREE.MeshLambertMaterial({ color: 0x232323 })
-          );
-          const m = new THREE.Mesh(geo, mats);
-          m.position.set(x * (sz + gap), y * (sz + gap), z * (sz + gap));
-          scene.add(m);
-          cubelets.push({ mesh: m, x, y, z });
+          const geo = new THREE.BoxGeometry(size, size, size);
+          const mats = Array(6).fill(0).map(() => new THREE.MeshLambertMaterial({ color: "#222" }));
+          const mesh = new THREE.Mesh(geo, mats);
+          mesh.position.set(x*(size+gap), y*(size+gap), z*(size+gap));
+          scene.add(mesh);
 
+          cubeletsRef.current.push({ mesh, x, y, z, mats });
         }
+      }
+    }
 
-    cubeletsRef.current = cubelets;
-    repaint();
+    rendererRef.current = renderer;
+    sceneRef.current = scene;
+    cameraRef.current = camera;
 
-    renderer.setAnimationLoop(() => renderer.render(scene, camera));
-    return () => renderer.dispose?.();
-  }, []);
+    applyFaceColors();
+    renderLoop();
+  };
+
+  const renderLoop = () => {
+    if (!rendererRef.current) return;
+    // sceneRef.current.rotation.y += 0.008;
+    rendererRef.current.render(sceneRef.current, cameraRef.current);
+    requestAnimationFrame(renderLoop);
+  };
+
+  const applyFaceColors = () => {
+    cubeletsRef.current.forEach(({ mesh, x, y, z }) => {
+      const M = mesh.material;
+      M.forEach(m => m.color.set("#222"));
+
+      if (y === 1) M[2].color.set(getColor(faces.U[z+1][x+1]));
+      if (y === -1) M[3].color.set(getColor(faces.D[2-(z+1)][x+1]));
+      if (x === 1) M[0].color.set(getColor(faces.R[2-(y+1)][2-(z+1)]));
+      if (x === -1) M[1].color.set(getColor(faces.L[2-(y+1)][z+1]));
+      if (z === 1) M[4].color.set(getColor(faces.F[2-(y+1)][x+1]));
+      if (z === -1) M[5].color.set(getColor(faces.B[2-(y+1)][2-(x+1)]));
+    });
+  };
+
+  const layerFor = (face) =>
+    cubeletsRef.current.filter(({mesh}) => {
+      const p = mesh.position;
+      if (face==="U") return Math.abs(p.y-1.01)<0.1;
+      if (face==="D") return Math.abs(p.y+1.01)<0.1;
+      if (face==="F") return Math.abs(p.z-1.01)<0.1;
+      if (face==="B") return Math.abs(p.z+1.01)<0.1;
+      if (face==="R") return Math.abs(p.x-1.01)<0.1;
+      if (face==="L") return Math.abs(p.x+1.01)<0.1;
+      return false;
+    });
+
+  const animateTurn = (face, dir, times, done) => {
+    const axisMap = {U:[0,1,0],D:[0,-1,0],F:[0,0,1],B:[0,0,-1],L:[-1,0,0],R:[1,0,0]};
+    const axis = new THREE.Vector3(...axisMap[face]);
+    const angle = (Math.PI/2)*dir*times*-1;
+    const layer = layerFor(face);
+
+    let f = 0, frames = 18;
+    const step = () => {
+      if (f < frames) {
+        const delta = angle/frames;
+        layer.forEach(c => {
+          c.mesh.rotateOnWorldAxis(axis, delta);
+          c.mesh.position.applyAxisAngle(axis, delta);
+        });
+        f++;
+        requestAnimationFrame(step);
+      } else {
+        if (done) done();
+      }
+    };
+    step();
+  };
+
+  const next = () => {
+    if (idx >= moves.length-1) return;
+    const m = moves[idx+1];
+    const f = m[0];
+    let d = 1, t = 1;
+    if (m.includes("'")) d = -1;
+    if (m.includes("2")) t = 2;
+    animateTurn(f, d, t, () => setIdx(i => i+1));
+  };
+
+  const prev = () => {
+    if (idx < 0) return;
+    const m = moves[idx];
+    const f = m[0];
+    let d = -1, t = 1;
+    if (m.includes("'")) d = 1;
+    if (m.includes("2")) t = 2;
+    animateTurn(f, d, t, () => setIdx(i => i-1));
+  };
+
+  const reset = () => {
+    setIdx(-1);
+    sceneRef.current = null;
+    initScene();
+  };
+
+  useEffect(initScene, []);
 
   return (
-    <div className="relative w-full h-[310px] border rounded bg-black/10">
-      <div ref={mountRef} className="w-full h-full" />
+    <div style={{ textAlign: "center" }}>
+      <div ref={mountRef} />
 
-      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-2 bg-white/80 rounded p-2">
+      <div style={{ marginTop:10 }}>
         <button onClick={prev}>Prev</button>
+        <button onClick={reset} style={{margin:"0 10px"}}>Reset</button>
         <button onClick={next}>Next</button>
-        <button onClick={reset}>Reset</button>
+      </div>
+
+      <div style={{marginTop:10,width:"80%",margin:"10px auto"}}>
+        <progress
+          max={moves.length}
+          value={idx+1}
+          style={{width:"100%"}}
+        />
+        <div>{idx+1}/{moves.length}</div>
       </div>
     </div>
   );
