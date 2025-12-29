@@ -49,9 +49,11 @@ export async function scanFaces(files) {
   form.append('faceD', files['D'])
   form.append('faceL', files['L'])
   form.append('faceB', files['B'])
+
   const res = await api.post('/api/scan', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
+
   return res.data
 }
 

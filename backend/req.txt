@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+pydantic
+python-multipart
+
+opencv-python-headless
+scikit-learn
+numpy
+pillow
+
+kociemba

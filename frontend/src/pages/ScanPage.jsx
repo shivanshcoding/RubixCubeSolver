@@ -1,57 +1,267 @@
-import { useState } from 'react'
-import { scanFaces, solveCube } from '../services/api.js'
-import { useNavigate } from 'react-router-dom'
+import { useState } from "react";
+import { scanFaces, solveCube, validateCube } from "../services/api.js";
+import { useNavigate } from "react-router-dom";
+
+import CubeNet from "../components/CubeNet.jsx";
+import Cube3DPreview from "../components/Cube3DPreview.jsx";
+
+const FACE_NAMES = ["U", "R", "F", "D", "L", "B"];
+
+// fallback palette if backend doesn't return one
+const DEFAULT_PALETTE = [
+  { face: "U", color: "#ffffff", label: "Up (U)" },
+  { face: "R", color: "#ff0000", label: "Right (R)" },
+  { face: "F", color: "#00ff00", label: "Front (F)" },
+  { face: "D", color: "#ffff00", label: "Down (D)" },
+  { face: "L", color: "#ffa500", label: "Left (L)" },
+  { face: "B", color: "#0000ff", label: "Back (B)" },
+];
 
 export default function ScanPage() {
-  const navigate = useNavigate()
-  const [files, setFiles] = useState({ U: null, R: null, F: null, D: null, L: null, B: null })
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const navigate = useNavigate();
+
+  const [files, setFiles] = useState({
+    U: null,
+    R: null,
+    F: null,
+    D: null,
+    L: null,
+    B: null,
+  });
+  const [faces, setFaces] = useState(null);
+  const [palette, setPalette] = useState(DEFAULT_PALETTE);
+  const [activeColor, setActiveColor] = useState("U");
+
+  const [cubeString, setCubeString] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [validated, setValidated] = useState(false);
 
   function onFile(face, file) {
-    setFiles((prev) => ({ ...prev, [face]: file }))
+    setFiles((prev) => ({ ...prev, [face]: file }));
   }
 
   async function onScan() {
-    setError('')
+    setError("");
+    setValidated(false);
+
     if (Object.values(files).some((f) => !f)) {
-      setError('Please upload all 6 face images.')
-      return
+      setError("Upload all 6 face images.");
+      return;
     }
-    setLoading(true)
+
+    setLoading(true);
     try {
-      const scan = await scanFaces(files)
-      const solve = await solveCube(scan.cubeString)
-      navigate('/solution', { state: { cubeString: scan.cubeString, ...solve } })
+      const scan = await scanFaces(files);
+
+      setFaces(scan.faces);
+      setCubeString(scan.cubeString);
+      setPalette(scan.palette || DEFAULT_PALETTE);
     } catch (e) {
-      setError(e?.response?.data?.detail?.error || 'Scan failed.')
+      setError(e?.response?.data?.detail?.error || "Scan failed.");
     } finally {
-      setLoading(false)
+      setLoading(false);
+    }
+  }
+
+  // === Validation ===
+  async function onValidate() {
+    setError("");
+    const result = await validateCube(cubeString);
+
+    if (!result.valid) {
+      setValidated(false);
+      setError(result.error);
+      return;
+    }
+
+    setValidated(true);
+  }
+
+  // === Solve ===
+  async function onSolve() {
+    if (!validated) return setError("Validate before solving.");
+
+    setLoading(true);
+    try {
+      const solution = await solveCube(cubeString);
+      navigate("/solution", {
+        state: {
+          faces,
+          palette,
+          solution,
+          cubeString,
+        },
+      });
+    } catch (e) {
+      setError("Failed to solve.");
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-semibold">AI (photo) Input</h2>
-      <p className="text-sm text-gray-600">Upload face-on pictures of each face. We'll analyze colors and compute the cube string.</p>
+      <h2 className="text-xl font-semibold">AI Photo Scan</h2>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {['U','R','F','D','L','B'].map((f) => (
-          <div key={f} className="bg-white rounded border p-3">
-            <div className="mb-2 font-medium">Face {f}</div>
-            <input type="file" accept="image/*" onChange={(e) => onFile(f, e.target.files?.[0] || null)} />
+      {!faces && (
+        <>
+          <p>Upload clear, centered photos of each face.</p>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {FACE_NAMES.map((f) => (
+              <div key={f}>
+                <label>Face {f}</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => onFile(f, e.target.files?.[0] || null)}
+                />
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      {error && <div className="text-red-600 text-sm">{error}</div>}
+          {/* 👇 INSERTED BLOCK: Preview in 2D NET layout */}
+          {Object.values(files).some((f) => f) && (
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold mb-2">
+                Preview (Uploaded Images)
+              </h3>
 
-      <div>
-        <button onClick={onScan} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Analyze & Solve</button>
-      </div>
+              <div className="flex flex-col items-center space-y-2">
+                {/* U */}
+                <div className="flex justify-center">
+                  {files.U && (
+                    <img
+                      src={URL.createObjectURL(files.U)}
+                      alt="U"
+                      className="w-28 h-28 object-cover border rounded"
+                    />
+                  )}
+                </div>
 
-      <LoadingOverlay visible={loading} messages={["Analyzing cube", "Computing solution"]} />
+                {/* L F R B */}
+                <div className="flex space-x-2">
+                  {files.L && (
+                    <img
+                      src={URL.createObjectURL(files.L)}
+                      alt="L"
+                      className="w-28 h-28 object-cover border rounded"
+                    />
+                  )}
+                  {files.F && (
+                    <img
+                      src={URL.createObjectURL(files.F)}
+                      alt="F"
+                      className="w-28 h-28 object-cover border rounded"
+                    />
+                  )}
+                  {files.R && (
+                    <img
+                      src={URL.createObjectURL(files.R)}
+                      alt="R"
+                      className="w-28 h-28 object-cover border rounded"
+                    />
+                  )}
+                  {files.B && (
+                    <img
+                      src={URL.createObjectURL(files.B)}
+                      alt="B"
+                      className="w-28 h-28 object-cover border rounded"
+                    />
+                  )}
+                </div>
+
+                {/* D */}
+                <div className="flex justify-center">
+                  {files.D && (
+                    <img
+                      src={URL.createObjectURL(files.D)}
+                      alt="D"
+                      className="w-28 h-28 object-cover border rounded"
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Scan Button */}
+          <button
+            className="bg-blue-600 text-white px-4 py-2 rounded mt-4"
+            onClick={onScan}
+          >
+            Analyze Cube
+          </button>
+        </>
+      )}
+
+      {faces && (
+        <>
+          <h3 className="text-lg font-semibold">
+            Edit / Confirm Detected Cube
+          </h3>
+
+          {/* Color Buttons */}
+          <div className="flex gap-2 my-2 flex-wrap">
+            {palette.map((p) => (
+              <button
+                key={p.face}
+                className={`px-3 py-2 rounded border ${
+                  activeColor === p.face ? "ring-2 ring-blue-600" : ""
+                }`}
+                style={{ backgroundColor: p.color }}
+                onClick={() => setActiveColor(p.face)}
+              >
+                {p.face}
+              </button>
+            ))}
+          </div>
+
+          {/* 2D + 3D */}
+          <div className="flex flex-wrap gap-4 items-start">
+            <CubeNet
+              faces={faces}
+              setFaces={setFaces}
+              activeColor={activeColor}
+              palette={palette}
+            />
+            <Cube3DPreview faces={faces} palette={palette} />
+          </div>
+
+          {error && <div className="text-red-600 text-sm">{error}</div>}
+
+          <div className="flex gap-2 mt-4">
+            {!validated && (
+              <button
+                onClick={onValidate}
+                className="bg-green-600 text-white px-4 py-2 rounded"
+              >
+                Validate Cube
+              </button>
+            )}
+            {validated && (
+              <button
+                onClick={onSolve}
+                className="bg-blue-600 text-white px-4 py-2 rounded"
+              >
+                Solve Cube
+              </button>
+            )}
+            <button
+              className="bg-gray-300 px-3 py-2 rounded"
+              onClick={() => {
+                setFaces(null);
+                setValidated(false);
+                setError("");
+              }}
+            >
+              Reset
+            </button>
+          </div>
+        </>
+      )}
+
+      {loading && <div>Processing...</div>}
     </div>
-  )
+  );
 }
-

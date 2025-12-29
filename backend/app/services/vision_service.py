@@ -1,95 +1,88 @@
-from typing import Dict, List, Tuple
-import numpy as np
 import cv2
-from fastapi import UploadFile
+import numpy as np
+from typing import Dict, Tuple
+from sklearn.cluster import KMeans
 
 
-async def scan_cube_from_images(face_files: Dict[str, UploadFile]) -> Tuple[str, Dict[str, List[List[str]]]]:
-    """
-    Very lightweight stub vision service that:
-    - Reads each face image
-    - Divides into a 3x3 grid
-    - Samples per-sticker color (unused in stub mapping)
-    - Uses center stickers to define canonical face letters
-    - Produces a 54-char cube string in Kociemba order: U,R,F,D,L,B
+# Helper: Convert UploadFile to OpenCV image
+async def read_image(file) -> np.ndarray:
+    data = await file.read()
+    img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+    if img is None:
+        raise ValueError(f"Invalid image: {file.filename}")
+    return img
 
-    NOTE: This is a stub suitable for initial integration testing.
-    It assumes images are captured face-on with roughly uniform sticker sizes.
-    """
 
-    async def _read_image(upload: UploadFile) -> np.ndarray:
-        data = await upload.read()
-        arr = np.frombuffer(data, dtype=np.uint8)
-        img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-        if img is None:
-            raise ValueError("Invalid image data")
-        return img
+# Extract dominant color of each patch region
+def dominant_color(patch: np.ndarray) -> np.ndarray:
+    data = patch.reshape((-1, 3))
+    kmeans = KMeans(n_clusters=1, n_init='auto').fit(data)
+    return kmeans.cluster_centers_[0]
 
-    def _sample_face_grid(img: np.ndarray) -> List[List[Tuple[int, int, int]]]:
+
+# Build cube string from faces
+def build_kociemba_string(face_maps: Dict[str, list]) -> str:
+    order = ["U", "R", "F", "D", "L", "B"]
+    result = ""
+    for f in order:
+        for row in face_maps[f]:
+            result += "".join(row)
+    return result
+
+
+# Main entry for /api/scan
+async def scan_cube_from_images(files: Dict[str, object]) -> Tuple[str, dict]:
+    face_grids = {f: [["?" for _ in range(3)] for _ in range(3)] for f in files.keys()}
+    color_vectors = []
+
+    # Read all faces
+    faces_opencv = {label: await read_image(file) for label, file in files.items()}
+
+    # Process each face image
+    for label, img in faces_opencv.items():
         h, w = img.shape[:2]
-        cell_h = h // 3
-        cell_w = w // 3
-        colors_grid: List[List[Tuple[int, int, int]]] = []
+        cell_h, cell_w = h // 3, w // 3
+
         for r in range(3):
-            row: List[Tuple[int, int, int]] = []
             for c in range(3):
-                y0 = r * cell_h
-                x0 = c * cell_w
-                y1 = min((r + 1) * cell_h, h)
-                x1 = min((c + 1) * cell_w, w)
-                roi = img[y0:y1, x0:x1]
-                # Sample mean color in BGR
-                b, g, rch, *_ = cv2.mean(roi)
-                row.append((int(rch), int(g), int(b)))  # Convert to RGB tuple
-            colors_grid.append(row)
-        return colors_grid
+                y1, y2 = r * cell_h, (r + 1) * cell_h
+                x1, x2 = c * cell_w, (c + 1) * cell_w
+                patch = img[y1:y2, x1:x2]
 
-    # Read and sample all faces
-    face_color_grids: Dict[str, List[List[Tuple[int, int, int]]]] = {}
-    for face_letter in ["U", "R", "F", "D", "L", "B"]:
-        img = await _read_image(face_files[face_letter])
-        face_color_grids[face_letter] = _sample_face_grid(img)
+                col = dominant_color(patch)
+                color_vectors.append(col)
 
-    # Define canonical mapping using center sticker (row=1, col=1)
-    canonical_centers: Dict[str, Tuple[int, int, int]] = {
-        f: face_color_grids[f][1][1] for f in ["U", "R", "F", "D", "L", "B"]
-    }
+    # Cluster for 6 colors
+    kmeans = KMeans(n_clusters=6, n_init="auto").fit(np.array(color_vectors))
+    centers = kmeans.cluster_centers_
 
-    def _nearest_face(rgb: Tuple[int, int, int]) -> str:
-        # Euclidean distance to canonical centers
-        ar = np.array(rgb, dtype=np.float32)
-        best_face = None
-        best_dist = 1e9
-        for f, center in canonical_centers.items():
-            cr = np.array(center, dtype=np.float32)
-            d = float(np.linalg.norm(ar - cr))
-            if d < best_dist:
-                best_dist = d
-                best_face = f
-        return best_face or "U"
+    # Assign cluster labels to face letters by center sticker rule
+    cluster_to_face = {}
+    for face in files.keys():
+        img = faces_opencv[face]
+        h, w = img.shape[:2]
+        center = img[h//3:h*2//3, w//3:w*2//3]  # center patch
+        center_color = dominant_color(center).reshape(1,-1)
+        idx = kmeans.predict(center_color)[0]
+        cluster_to_face[idx] = face
 
-    # Map each sticker to nearest canonical face letter
-    faces_labels: Dict[str, List[List[str]]] = {}
-    for f in ["U", "R", "F", "D", "L", "B"]:
-        labels_grid: List[List[str]] = []
+    # Reconstruct 3x3 grids with proper labels
+    idx = 0
+    for face in ["U","R","F","D","L","B"]:
+        img = faces_opencv[face]
+        h, w = img.shape[:2]
+        cell_h, cell_w = h // 3, w // 3
         for r in range(3):
-            row_labels: List[str] = []
             for c in range(3):
-                rgb = face_color_grids[f][r][c]
-                # Ensure center sticks keep their own face
-                if r == 1 and c == 1:
-                    row_labels.append(f)
-                else:
-                    row_labels.append(_nearest_face(rgb))
-            labels_grid.append(row_labels)
-        faces_labels[f] = labels_grid
+                y1, y2 = r * cell_h, (r + 1) * cell_h
+                x1, x2 = c * cell_w, (c + 1) * cell_w
+                patch = img[y1:y2, x1:x2]
+                col = dominant_color(patch).reshape(1,-1)
+                cluster = kmeans.predict(col)[0]
+                face_grids[face][r][c] = cluster_to_face.get(cluster, "?")
+                idx += 1
 
-    # Produce cube string in Kociemba order U,R,F,D,L,B, row-major
-    def _flatten_face(face_grid: List[List[str]]) -> List[str]:
-        return [face_grid[r][c] for r in range(3) for c in range(3)]
+    # Build cube string for solver (URFDLB order)
+    cube_string = build_kociemba_string(face_grids)
 
-    cube_string = "".join(
-        _flatten_face(faces_labels[f]) for f in ["U", "R", "F", "D", "L", "B"]
-    )
-
-    return cube_string, faces_labels
+    return cube_string, face_grids
