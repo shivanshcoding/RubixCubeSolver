@@ -57,7 +57,7 @@ export default function CubeSolutionViewer({ faces, palette, moves }) {
 
   const renderLoop = () => {
     if (!rendererRef.current) return;
-    // sceneRef.current.rotation.y += 0.008;
+    sceneRef.current.rotation.y += 0.008;
     rendererRef.current.render(sceneRef.current, cameraRef.current);
     requestAnimationFrame(renderLoop);
   };
@@ -141,8 +141,7 @@ export default function CubeSolutionViewer({ faces, palette, moves }) {
 
   return (
     <div style={{ textAlign: "center" }}>
-      <div ref={mountRef} />
-
+      <div ref={mountRef} style={{width:"100%",height:"310px", backgroundColor:"#181818"}} />
       <div style={{ marginTop:10 }}>
         <button onClick={prev}>Prev</button>
         <button onClick={reset} style={{margin:"0 10px"}}>Reset</button>
