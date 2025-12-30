@@ -1,6 +1,5 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from pydantic import BaseModel
-#yes done
 
 
 class SolveResponse(BaseModel):
@@ -11,7 +10,8 @@ class SolveResponse(BaseModel):
 
 class ScanResponse(BaseModel):
     cubeString: str
-    faces: Optional[Dict[str, List[List[str]]]] = None  # Optional per-face color/label grid
+    faces: Dict[str, Any]
+    palette: Optional[List[Dict[str, str]]] = None
 
 
 class ValidateResponse(BaseModel):

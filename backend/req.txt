@@ -7,5 +7,7 @@ opencv-python-headless
 scikit-learn
 numpy
 pillow
+scikit-image 
+imutils
 
 kociemba
