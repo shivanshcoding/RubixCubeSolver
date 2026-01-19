@@ -58,15 +58,21 @@ async def scan(
     faceB: UploadFile = File(...),
 ) -> ScanResponse:
     try:
-        cube_string, faces_data, palette = await scan_cube_from_images(
+        cube_string, faces_data, conf_stats, palette = await scan_cube_from_images(
             {"U": faceU, "R": faceR, "F": faceF, "D": faceD, "L": faceL, "B": faceB}
         )
+        print(f"Confidence: {conf_stats}")
+        print(f"Cube String: {cube_string}")
+
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=422, detail={"error": str(e)})
 
     return ScanResponse(
         cubeString=cube_string,
         faces=faces_data,
+        confidence=conf_stats,
         palette=palette
     )
 

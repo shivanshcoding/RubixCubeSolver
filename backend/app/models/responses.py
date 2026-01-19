@@ -12,6 +12,7 @@ class ScanResponse(BaseModel):
     cubeString: str
     faces: Dict[str, Any]
     palette: Optional[List[Dict[str, str]]] = None
+    confidence: Optional[Dict[str, float]] = None
 
 
 class ValidateResponse(BaseModel):
