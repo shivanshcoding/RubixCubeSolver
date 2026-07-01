@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Toaster } from "react-hot-toast";
 import dynamic from "next/dynamic";
 import RouteGuard from "./RouteGuard";
+import { useUIStore } from "@/store/uiStore";
 
 const ParticleBackground = dynamic(
   () => import("@/components/shared/ParticleBackground"),
@@ -28,9 +29,11 @@ export default function Providers({ children }) {
       })
   );
 
+  const showParticles = useUIStore((state) => state.showParticles);
+
   return (
     <QueryClientProvider client={queryClient}>
-      <ParticleBackground particleCount={50} />
+      {showParticles && <ParticleBackground particleCount={50} />}
       <RouteGuard>
         {children}
       </RouteGuard>

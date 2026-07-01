@@ -17,12 +17,16 @@ const FACE_LABELS = { U: "Up", R: "Right", F: "Front", D: "Down", L: "Left", B: 
  *
  * Each sticker is clickable and updates the cube store.
  */
-export default function CubeNet() {
+export default function CubeNet({ onCenterClick }) {
   const { faces, colorMapping, activeColor, paintSticker, getStickerCounts } = useCubeStore();
   const counts = getStickerCounts();
 
-  function handleClick(face, row, col) {
-    paintSticker(face, row, col);
+  function handleClick(face, row, col, isCenter) {
+    if (isCenter) {
+      if (onCenterClick) onCenterClick(face);
+    } else {
+      paintSticker(face, row, col);
+    }
   }
 
   function FaceGrid({ face }) {
@@ -38,15 +42,15 @@ export default function CubeNet() {
               return (
                 <motion.button
                   key={`${face}-${ri}-${ci}`}
-                  onClick={() => handleClick(face, ri, ci)}
+                  onClick={() => handleClick(face, ri, ci, isCenter)}
                   className={`cube-sticker ${isCenter ? "center" : ""} ${
                     cell === activeColor && !isCenter ? "active" : ""
                   }`}
-                  style={{ backgroundColor: colorMapping[cell] || "#333" }}
-                  whileHover={!isCenter ? { scale: 1.1 } : {}}
-                  whileTap={!isCenter ? { scale: 0.95 } : {}}
+                  style={{ backgroundColor: colorMapping[cell] || "#333", cursor: isCenter && onCenterClick ? "pointer" : isCenter ? "default" : "pointer" }}
+                  whileHover={!isCenter || onCenterClick ? { scale: 1.1 } : {}}
+                  whileTap={!isCenter || onCenterClick ? { scale: 0.95 } : {}}
                   aria-label={`Face ${face}, row ${ri}, col ${ci}: ${cell}`}
-                  disabled={isCenter}
+                  disabled={isCenter && !onCenterClick}
                 />
               );
             })

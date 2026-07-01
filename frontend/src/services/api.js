@@ -14,6 +14,17 @@ export const api = axios.create({
   },
 });
 
+export function getWsBaseUrl() {
+  if (typeof window !== "undefined") {
+    // If API_BASE_URL is a relative path or local, use window.location
+    if (API_BASE_URL.startsWith("http")) {
+      return API_BASE_URL.replace(/^http/, "ws");
+    }
+    return `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`;
+  }
+  return API_BASE_URL.replace(/^http/, "ws");
+}
+
 // ─── Request Interceptor: attach JWT token ───────────────────
 api.interceptors.request.use(
   (config) => {

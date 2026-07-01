@@ -24,7 +24,7 @@ export default function RootLayout({ children }) {
       <body className="antialiased flex flex-col min-h-screen">
         <Providers>
           <Navbar />
-          <main className="pt-16 flex-1">{children}</main>
+          <main className="pt-16 pb-16 flex-1">{children}</main>
           <Footer />
         </Providers>
       </body>

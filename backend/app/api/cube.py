@@ -28,6 +28,7 @@ from app.cv.pipeline import (
     get_dominant_color_lab,
     classify_color_lab,
     TemporalSmoother,
+    calculate_diagnostics,
 )
 from app.cv.llm_provider import get_llm_provider, is_llm_available
 
@@ -175,6 +176,67 @@ async def scan_cube(
         raise HTTPException(status_code=422, detail={"error": str(e)})
 
 
+@router.post("/scan/single")
+async def scan_single_face(
+    image: UploadFile = File(...),
+    palette: Optional[str] = None # JSON string of {"U": "#ffffff", ...}
+):
+    """Scan a single cube face image and return the detected colors."""
+    try:
+        from app.cv.pipeline import read_image
+        img = await read_image(image)
+        processed = preprocess_image(img)
+        patches, pts = extract_stickers(processed)
+        
+        center_labs = None
+        if palette:
+            try:
+                hex_palette = json.loads(palette)
+                center_labs = {}
+                for face, hex_code in hex_palette.items():
+                    if hex_code.startswith("#"):
+                        h = hex_code.lstrip("#")
+                        rgb = tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+                        bgr = np.array([[rgb[::-1]]], dtype=np.uint8)
+                        lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)[0][0]
+                        center_labs[face] = lab
+            except Exception:
+                pass
+                
+        grid = [["" for _ in range(3)] for _ in range(3)]
+        confs = [[0.0 for _ in range(3)] for _ in range(3)]
+        flat_stickers = []
+
+        if center_labs:
+            for i, patch in enumerate(patches):
+                r, c = i // 3, i % 3
+                lab = get_dominant_color_lab(patch)
+                face, conf = classify_color_lab(lab, center_labs)
+                grid[r][c] = face
+                confs[r][c] = round(conf, 3)
+                flat_stickers.append({"color": json.loads(palette).get(face, "unknown"), "confidence": confs[r][c]})
+        else:
+            for i, patch in enumerate(patches):
+                r, c = i // 3, i % 3
+                bgr = np.mean(patch.reshape(-1, 3), axis=0)
+                rgb = bgr[::-1].astype(int)
+                hex_color = "#{:02x}{:02x}{:02x}".format(*rgb)
+                grid[r][c] = hex_color
+                confs[r][c] = 0.5
+                flat_stickers.append({"color": hex_color, "confidence": 0.5})
+
+        diagnostics = calculate_diagnostics(img, pts)
+        
+        return {
+            "stickers": flat_stickers,
+            "grid": grid,
+            "diagnostics": diagnostics,
+            "success": True
+        }
+    except Exception as e:
+        raise HTTPException(status_code=422, detail={"error": str(e)})
+
+
 # ─── WebSocket Live Scanning ─────────────────────────────────────
 
 @router.websocket("/scan/live")
@@ -209,38 +271,55 @@ async def live_scan_websocket(websocket: WebSocket):
 
             # Extract stickers
             try:
-                patches = extract_stickers(processed)
+                patches, pts = extract_stickers(processed)
             except Exception:
                 await websocket.send_json({
-                    "stickers": [["?" for _ in range(3)] for _ in range(3)],
-                    "confidences": [[0.0 for _ in range(3)] for _ in range(3)],
-                    "all_confident": False,
+                    "status": "error",
+                    "stickers": [{"color": "unknown", "confidence": 0.0} for _ in range(9)],
+                    "diagnostics": {"lighting": 0, "sharpness": 0, "angle": 0, "glare": 0},
+                    "fps": 0,
                     "stable": False,
                 })
                 continue
 
-            # If we have center calibration data, classify
-            if center_labs and message.get("use_calibration"):
-                grid = [["" for _ in range(3)] for _ in range(3)]
-                confs = [[0.0 for _ in range(3)] for _ in range(3)]
+            diagnostics = calculate_diagnostics(frame, pts)
 
+            # If we have center calibration data, classify
+            # But wait, the frontend sends hex colors. We need to convert hex to LAB on the fly if provided.
+            hex_palette = message.get("palette", {})
+            if hex_palette:
+                # Convert hex palette to LAB
+                center_labs_dynamic = {}
+                for face, hex_code in hex_palette.items():
+                    if hex_code.startswith("#"):
+                        h = hex_code.lstrip("#")
+                        rgb = tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+                        bgr = np.array([[rgb[::-1]]], dtype=np.uint8)
+                        lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)[0][0]
+                        center_labs_dynamic[face] = lab
+                center_labs = center_labs_dynamic
+
+            grid = [["" for _ in range(3)] for _ in range(3)]
+            confs = [[0.0 for _ in range(3)] for _ in range(3)]
+            flat_stickers = []
+
+            if center_labs:
                 for i, patch in enumerate(patches):
                     r, c = i // 3, i % 3
                     lab = get_dominant_color_lab(patch)
                     face, conf = classify_color_lab(lab, center_labs)
                     grid[r][c] = face
                     confs[r][c] = round(conf, 3)
+                    flat_stickers.append({"color": hex_palette.get(face, "unknown"), "confidence": confs[r][c]})
             else:
-                # Return raw BGR mean colors for frontend display
-                grid = [["?" for _ in range(3)] for _ in range(3)]
-                confs = [[0.0 for _ in range(3)] for _ in range(3)]
-
                 for i, patch in enumerate(patches):
                     r, c = i // 3, i % 3
                     bgr = np.mean(patch.reshape(-1, 3), axis=0)
                     rgb = bgr[::-1].astype(int)
-                    grid[r][c] = "#{:02x}{:02x}{:02x}".format(*rgb)
+                    hex_color = "#{:02x}{:02x}{:02x}".format(*rgb)
+                    grid[r][c] = hex_color
                     confs[r][c] = 0.5  # No calibration = uncertain
+                    flat_stickers.append({"color": hex_color, "confidence": 0.5})
 
             # Check confidence threshold
             all_confident = all(
@@ -252,11 +331,16 @@ async def live_scan_websocket(websocket: WebSocket):
             # Temporal smoothing
             is_stable = smoother.add_frame(grid)
 
+            # Calculate FPS from time delta if needed (or let frontend calculate it)
+            # Frontend handles its own FPS, but we can reflect a generic number or a tracked one
+            # For now, let's just send back what frontend expects
             await websocket.send_json({
-                "stickers": grid,
-                "confidences": confs,
-                "all_confident": all_confident,
-                "stable": is_stable,
+                "status": "stable" if is_stable and all_confident else "detecting",
+                "stickers": flat_stickers,
+                "diagnostics": diagnostics,
+                "fps": message.get("fps", 0), # Pass back frontend FPS or calculate it
+                "stable": is_stable and all_confident,
+                "grid": grid # Useful for debugging or frontend parsing
             })
 
     except WebSocketDisconnect:

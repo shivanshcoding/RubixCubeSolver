@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
@@ -8,61 +8,164 @@ import dynamic from "next/dynamic";
 import {
   RiCameraLine,
   RiRefreshLine,
-  RiGridLine,
   RiCheckLine,
   RiArrowRightLine,
   RiEditLine,
+  RiUploadCloud2Line,
+  RiPaletteLine,
+  RiInformationLine
 } from "react-icons/ri";
 import { useCubeStore } from "@/store/cubeStore";
-import { scanCube, solveCube } from "@/services/api";
+import { useUIStore } from "@/store/uiStore";
+import { solveCube, validateCubeString } from "@/services/api";
 
+import ColorConfiguration from "@/components/cube/ColorConfiguration";
+import WebcamScanner from "@/components/cube/WebcamScanner";
+import FaceReviewPanel from "@/components/cube/FaceReviewPanel";
+import UploadFallback from "@/components/cube/UploadFallback";
+import CubeNet from "@/components/cube/CubeNet";
+import InstructionAccordion from "@/components/cube/InstructionAccordion";
 
 const Cube3D = dynamic(() => import("@/components/cube/Cube3D"), { ssr: false });
 const SolvingOverlay = dynamic(() => import("@/components/cube/SolvingOverlay"), { ssr: false });
 
-const FACE_ORDER = ["U", "L", "F", "R", "B", "D"];
+const FACE_ORDER = ["U", "R", "F", "D", "L", "B"];
 const FACE_LABELS = {
-  U: "Up (White)",
-  L: "Left (Orange)",
-  F: "Front (Green)",
-  R: "Right (Red)",
-  B: "Back (Blue)",
-  D: "Down (Yellow)",
+  U: "Up",
+  R: "Right",
+  F: "Front",
+  D: "Down",
+  L: "Left",
+  B: "Back",
 };
+
+const DIAGNOSTICS = [
+  { key: "lighting", label: "Lighting" },
+  { key: "sharpness", label: "Sharpness" },
+  { key: "angle", label: "Angle" },
+  { key: "glare", label: "Glare" }
+];
 
 export default function ScannerPage() {
   const router = useRouter();
-  const { setFaces, setColorMapping, setSolution, setSource } = useCubeStore();
+  const { 
+    faces, isColorMappingSet, colorMapping, setColorMapping,
+    setSticker, isValidated, validationErrors, setValidation, 
+    getKociembaString, isCountsValid, setSolution, setSource,
+    activeColor, setActiveColor, getPalette, solution, reset
+  } = useCubeStore();
 
-  const [files, setFiles] = useState({ U: null, R: null, F: null, D: null, L: null, B: null });
-  const [previews, setPreviews] = useState({});
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [scanResult, setScanResult] = useState(null);
+  const [isMounted, setIsMounted] = useState(false);
+  const [tempColors, setTempColors] = useState({ ...colorMapping });
 
-  // Solving states
+  // State Machine
+  // Modes: "color_config", "scanning", "review", "completed", "upload_fallback"
+  const [mode, setMode] = useState("color_config"); 
+  const [activeScanFace, setActiveScanFace] = useState("U");
+  const [reviewStickers, setReviewStickers] = useState(null);
+
+  // Scanner settings and diagnostics
+  const [gridSize, setGridSize] = useState(0.6); // 0.4 to 0.7
+  const [sensitivity, setSensitivity] = useState("balanced");
+  const [diagnostics, setDiagnostics] = useState(null);
+  const [wsStatus, setWsStatus] = useState("connecting");
+  const [wsError, setWsError] = useState("");
+
+  // Solving state
   const [isSolving, setIsSolving] = useState(false);
   const [isSolveComplete, setIsSolveComplete] = useState(false);
 
-  const handleFile = (face, file) => {
-    if (!file) return;
-    setFiles((prev) => ({ ...prev, [face]: file }));
-    const url = URL.createObjectURL(file);
-    setPreviews((prev) => ({ ...prev, [face]: url }));
-    setError("");
+  useEffect(() => {
+    setIsMounted(true);
+    if (solution) {
+      reset();
+      setMode("color_config");
+    } else if (isColorMappingSet) {
+      setMode("scanning");
+    }
+  }, [isColorMappingSet, solution, reset]);
+
+  // Handle particle background visibility
+  const setShowParticles = useUIStore((state) => state.setShowParticles);
+  useEffect(() => {
+    if (mode === "scanning" || mode === "review" || mode === "upload_fallback") {
+      setShowParticles(false);
+    } else {
+      setShowParticles(true);
+    }
+    return () => setShowParticles(true);
+  }, [mode, setShowParticles]);
+
+  if (!isMounted) return null;
+
+  const currentFace = activeScanFace;
+  const palette = getPalette();
+  
+  // ─── Actions ──────────────────────────────────────────────────
+
+  const handleColorConfirm = () => {
+    setColorMapping(tempColors);
+    setMode("scanning");
+    toast.success("Calibration complete!");
+  };
+
+  const handleCapture = (stickers) => {
+    setReviewStickers(stickers);
+    setMode("review");
+  };
+
+  const handleAcceptFace = (stickers) => {
+    stickers.forEach((s, i) => {
+      const row = Math.floor(i / 3);
+      const col = i % 3;
+      const faceVal = typeof s === "object" ? s.color : s;
+      setSticker(currentFace, row, col, faceVal);
+    });
+
+    const currIdx = FACE_ORDER.indexOf(currentFace);
+    if (currIdx < 5) {
+      setActiveScanFace(FACE_ORDER[currIdx + 1]);
+      setMode("scanning");
+    } else {
+      setMode("completed");
+      validateFinalCube();
+    }
+  };
+
+  const validateFinalCube = async () => {
+    if (!isCountsValid()) {
+      setValidation(false, ["Each color must be used exactly 9 times."]);
+      return;
+    }
+    const cubeString = getKociembaString();
+    try {
+      const res = await validateCubeString(cubeString);
+      if (res.valid) {
+        setValidation(true);
+        toast.success("Cube is valid and ready to solve!");
+      } else {
+        setValidation(false, [res.error || "Invalid cube configuration"]);
+      }
+    } catch (err) {
+      setValidation(false, ["Validation failed. Check your cube state."]);
+    }
   };
 
   const handleSolve = async () => {
-    if (!scanResult) return;
+    if (!isValidated) {
+      toast.error("Cube state is invalid. Please correct it.");
+      return;
+    }
     
     setIsSolving(true);
     setIsSolveComplete(false);
-    setSource("/cube/scanner"); // Track where we came from
+    setSource("/cube/scanner");
 
     await new Promise(requestAnimationFrame);
 
     try {
-      const result = await solveCube(scanResult.cube_string);
+      const cubeString = getKociembaString();
+      const result = await solveCube(cubeString);
       if (result.success) {
         setSolution(result);
         setIsSolveComplete(true);
@@ -84,255 +187,395 @@ export default function ScannerPage() {
     }, 1000);
   };
 
-  const handleScan = async () => {
-    const missing = Object.entries(files).filter(([_, v]) => !v).map(([k]) => k);
-    if (missing.length > 0) {
-      toast.error(`Missing faces: ${missing.join(", ")}`);
-      return;
+  const handleEditSticker = (index) => {
+    const faceKeys = Object.keys(colorMapping);
+    const newStickers = [...reviewStickers];
+    const currentVal = typeof newStickers[index] === "object" ? newStickers[index].color : newStickers[index];
+    
+    let nextIdx = 0;
+    if (currentVal !== "unknown") {
+      const foundIdx = faceKeys.indexOf(currentVal);
+      if (foundIdx !== -1) nextIdx = (foundIdx + 1) % 6;
     }
-
-    setLoading(true);
-    setError("");
-    try {
-      const result = await scanFaces(files);
-      setScanResult(result);
-
-      // Update cube store
-      if (result.faces) {
-        setFaces(result.faces);
-      }
-      if (result.palette) {
-        const mapping = {};
-        result.palette.forEach((p) => { mapping[p.face] = p.color; });
-        setColorMapping(mapping);
-      }
-
-      toast.success(`Cube scanned via ${result.method === "llm" ? "AI" : "Computer Vision"}!`);
-    } catch (err) {
-      const msg = err?.response?.data?.detail?.error || err?.response?.data?.detail || "Scan failed";
-      setError(msg);
-      toast.error(msg);
-    } finally {
-      setLoading(false);
-    }
+    
+    newStickers[index] = faceKeys[nextIdx];
+    setReviewStickers(newStickers);
   };
 
-  const allUploaded = Object.values(files).every((f) => f !== null);
+  // ─── Rendering Helpers ──────────────────────────────────────
+
+  const renderStars = (score) => {
+    const filled = Math.round(score / 20);
+    return (
+      <div className="flex gap-0.5">
+        {[1, 2, 3, 4, 5].map(i => (
+          <span key={i} className={`text-xs ${i <= filled ? "text-amber-400" : "text-zinc-600"}`}>★</span>
+        ))}
+      </div>
+    );
+  };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-3xl font-bold mb-2" style={{ fontFamily: "var(--font-display)" }}>
-          Camera Scanner
-        </h1>
-        <p className="text-zinc-400 text-sm mb-6">
-          Upload photos of each cube face for AI-powered color detection.
-        </p>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
+            <RiCameraLine className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold" style={{ fontFamily: "var(--font-display)" }}>
+              Camera Scanner
+            </h1>
+            <p className="text-zinc-500 text-sm">
+              Configure colors, scan faces, then solve.
+            </p>
+          </div>
+        </div>
+
+        {/* Step Indicator */}
+        <div className="flex items-center gap-2 mt-5">
+          {[
+            { num: 1, label: "Cube Colors", icon: RiPaletteLine, matchMode: ["color_config"] },
+            { num: 2, label: "Scan Faces", icon: RiCameraLine, matchMode: ["scanning", "review", "upload_fallback"] },
+            { num: 3, label: "Validation", icon: RiCheckLine, matchMode: ["completed"] },
+          ].map((s) => {
+            const isActive = s.matchMode.includes(mode);
+            const isCompleted = s.num < (mode === "color_config" ? 1 : mode === "completed" ? 4 : 3) && !isActive;
+            return (
+              <button
+                key={s.num}
+                onClick={() => {
+                  if (s.num === 1) setMode("color_config");
+                  else if (isColorMappingSet && mode === "color_config") setMode("scanning");
+                }}
+                className={`manual-step-btn ${isActive ? "active" : ""}`}
+              >
+                <span className={`manual-step-num ${isActive ? "active" : ""}`}>
+                  {isCompleted ? <RiCheckLine className="w-3.5 h-3.5" /> : s.num}
+                </span>
+                <s.icon className="w-4 h-4 hidden sm:block" />
+                {s.label}
+              </button>
+            );
+          })}
+          <div className="hidden sm:block flex-1 h-px bg-gradient-to-r from-white/10 to-transparent mx-2" />
+        </div>
       </motion.div>
 
       <AnimatePresence mode="wait">
-        {!scanResult ? (
+        
+        {/* ─── Mode: Color Config ─── */}
+        {mode === "color_config" && (
           <motion.div
-            key="upload"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            key="color_config"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
           >
-            {/* Upload Grid */}
-            <div className="glass-card p-6 mb-6">
-              <h2 className="text-sm font-semibold mb-4 text-zinc-300">Upload Face Photos</h2>
-              <p className="text-xs text-zinc-500 mb-4">
-                Take clear, centered photos of each face. Hold the cube steady with good lighting.
-              </p>
-
-              {/* Unfolded layout for upload */}
-              <div
-                className="inline-grid gap-3 mx-auto"
-                style={{
-                  gridTemplateColumns: "repeat(4, 120px)",
-                  gridTemplateRows: "repeat(3, auto)",
-                }}
-              >
-                {/* U */}
-                <div className="col-start-2 row-start-1">
-                  <FaceUpload face="U" file={files.U} preview={previews.U} onFile={handleFile} />
-                </div>
-
-                {/* L F R B */}
-                <div className="col-start-1 row-start-2">
-                  <FaceUpload face="L" file={files.L} preview={previews.L} onFile={handleFile} />
-                </div>
-                <div className="col-start-2 row-start-2">
-                  <FaceUpload face="F" file={files.F} preview={previews.F} onFile={handleFile} />
-                </div>
-                <div className="col-start-3 row-start-2">
-                  <FaceUpload face="R" file={files.R} preview={previews.R} onFile={handleFile} />
-                </div>
-                <div className="col-start-4 row-start-2">
-                  <FaceUpload face="B" file={files.B} preview={previews.B} onFile={handleFile} />
-                </div>
-
-                {/* D */}
-                <div className="col-start-2 row-start-3">
-                  <FaceUpload face="D" file={files.D} preview={previews.D} onFile={handleFile} />
-                </div>
-              </div>
-            </div>
-
-            {error && (
-              <div className="glass-card p-4 border-red-400/20 text-sm text-red-400 mb-4">
-                {error}
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                onClick={handleScan}
-                disabled={!allUploaded || loading}
-                className="btn-primary flex items-center gap-2 disabled:opacity-50"
-              >
-                {loading ? (
-                  <>
-                    <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <RiCameraLine className="w-4 h-4" />
-                    Analyze Cube
-                  </>
-                )}
-              </button>
-
-              <button
-                onClick={() => {
-                  setFiles({ U: null, R: null, F: null, D: null, L: null, B: null });
-                  setPreviews({});
-                }}
-                className="btn-ghost flex items-center gap-1.5"
-              >
-                <RiRefreshLine className="w-4 h-4" />
-                Clear All
-              </button>
-            </div>
-          </motion.div>
-        ) : (
-          <motion.div
-            key="result"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            {/* Scan Result */}
-            <div className="glass-card p-6 mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold">Scan Result</h2>
-                <span className="badge">
-                  {scanResult.method === "llm" ? "AI Detected" : "CV Detected"}
-                </span>
-              </div>
-
-              <div className="grid lg:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="text-sm text-zinc-400 mb-3">Detected Colors</h3>
-                  <div className="grid grid-cols-6 gap-2 mb-4">
-                    {scanResult.palette?.map((p) => (
-                      <div key={p.face} className="text-center">
-                        <div
-                          className="w-8 h-8 rounded-lg mx-auto mb-1 border border-white/10"
-                          style={{ backgroundColor: p.color }}
-                        />
-                        <div className="text-xs text-zinc-500">{p.face}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="text-xs text-zinc-500 font-mono break-all p-2 rounded bg-white/[0.03]">
-                    {scanResult.cube_string}
-                  </div>
-                </div>
-
-                <Cube3D height="300px" autoRotate={true} />
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => router.push("/cube/manual")}
-                className="btn-secondary flex items-center gap-2"
-              >
-                <RiEditLine className="w-4 h-4" />
-                Edit Manually
-              </button>
-              <button
-                onClick={handleSolve}
-                disabled={isSolving}
-                className="btn-primary flex items-center gap-2 disabled:opacity-50"
-              >
-                {isSolving ? (
-                  <>
-                    <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                    Solving...
-                  </>
-                ) : (
-                  <>
-                    Proceed to Solve
-                    <RiArrowRightLine className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-              <button
-                onClick={() => { setScanResult(null); setError(""); }}
-                className="btn-ghost flex items-center gap-1.5"
-              >
-                <RiRefreshLine className="w-4 h-4" />
-                Rescan
-              </button>
-            </div>
+            <ColorConfiguration 
+              tempColors={tempColors}
+              setTempColors={setTempColors}
+              onConfirm={handleColorConfirm}
+            />
           </motion.div>
         )}
+
+        {/* ─── Mode: Scanning ─── */}
+        {(mode === "scanning" || mode === "review" || mode === "upload_fallback") && (
+          <motion.div
+            key="scan_workflow"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="flex flex-col gap-6"
+          >
+            {/* Face Selector Row */}
+            <div className="flex justify-between items-center bg-black/20 border border-white/5 rounded-xl p-2">
+               <div className="flex flex-wrap gap-2">
+                 {FACE_ORDER.map(f => (
+                   <button 
+                     key={f}
+                     onClick={() => {
+                        setActiveScanFace(f);
+                        if (mode === "review") setMode("scanning");
+                     }}
+                     className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all
+                       ${activeScanFace === f ? "bg-white/10 text-white shadow-sm border border-white/10" : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"}
+                     `}
+                   >
+                     {FACE_LABELS[f]} ({f})
+                   </button>
+                 ))}
+               </div>
+               
+               {isCountsValid() && mode !== "completed" && (
+                 <button 
+                   onClick={() => {
+                     setMode("completed");
+                     validateFinalCube();
+                   }} 
+                   className="btn-primary text-sm py-2 px-4 shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+                 >
+                   Proceed to Solve
+                 </button>
+               )}
+            </div>
+
+            {/* Top Zone: 2-Column Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-[45%_1fr] gap-6">
+              
+              {/* Col 1: Webcam/Review/Fallback */}
+              <div className="h-full min-h-[300px]">
+                {mode === "scanning" && (
+                  <WebcamScanner 
+                    face={activeScanFace}
+                    palette={colorMapping}
+                    sensitivity={sensitivity}
+                    gridSize={gridSize}
+                    onCapture={handleCapture}
+                    onBack={() => setMode("upload_fallback")}
+                    onDiagnosticsUpdate={(diag, stable, status, err) => {
+                       if (diag) setDiagnostics(diag);
+                       setWsStatus(status);
+                       if (err) setWsError(err);
+                    }}
+                  />
+                )}
+                {mode === "review" && (
+                  <div className="h-full bg-black/40 border border-white/10 rounded-2xl flex items-center justify-center p-4">
+                    <FaceReviewPanel 
+                      face={activeScanFace}
+                      stickers={reviewStickers}
+                      onAccept={handleAcceptFace}
+                      onRescan={() => setMode("scanning")}
+                      onEditSticker={handleEditSticker}
+                    />
+                  </div>
+                )}
+                {mode === "upload_fallback" && (
+                  <UploadFallback 
+                    face={activeScanFace}
+                    palette={colorMapping}
+                    onCapture={handleCapture}
+                    onBack={() => setMode("scanning")}
+                  />
+                )}
+              </div>
+
+              {/* Col 2: Editable 2D Live Map */}
+              <div className="h-full">
+                <div className="manual-card h-full flex flex-col !p-4">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                     <div className="text-sm font-semibold text-zinc-200">2D Live Map</div>
+                     
+                     <div className="flex items-center gap-3">
+                       <div className="text-[10px] text-zinc-500 text-right leading-tight max-w-[160px] hidden xl:block">
+                         Paint missing stickers or click a center to scan.
+                       </div>
+                       <div className="flex gap-1 p-1 bg-black/30 rounded-lg border border-white/5">
+                         {palette.map((item) => (
+                           <button
+                             key={item.face}
+                             onClick={() => setActiveColor(item.face)}
+                             className={`w-5 h-5 rounded-md border transition-all ${
+                               activeColor === item.face 
+                                 ? "border-white/80 shadow-[0_0_8px_rgba(255,255,255,0.2)] scale-110 z-10" 
+                                 : "border-white/10 opacity-60 hover:opacity-100"
+                             }`}
+                             style={{ backgroundColor: item.color }}
+                           />
+                         ))}
+                       </div>
+                     </div>
+                  </div>
+                  
+                  {/* 2D Net */}
+                  <div className="flex-1 flex items-center justify-center min-h-[300px]">
+                    <div className="w-full max-w-[420px] mx-auto">
+                      <CubeNet 
+                        onCenterClick={(faceKey) => {
+                           setActiveScanFace(faceKey);
+                           if (mode === "review") setMode("scanning");
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Bottom Zone: Calibration & Diagnostics */}
+            {mode === "scanning" && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
+                 
+                 {/* Auto Calibration */}
+                 <div className="manual-card">
+                   <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2 mb-6">
+                     <RiCameraLine className="w-4 h-4 text-zinc-400" />
+                     Calibration
+                   </h3>
+                   
+                   <div className="space-y-6">
+                     {/* Grid Size Slider */}
+                     <div>
+                       <div className="flex justify-between text-xs text-zinc-400 mb-2">
+                         <span>Grid Size</span>
+                         <span className="font-mono text-amber-400">{Math.round(gridSize * 100)}%</span>
+                       </div>
+                       <input 
+                         type="range" 
+                         min="0.4" 
+                         max="0.7" 
+                         step="0.05"
+                         value={gridSize}
+                         onChange={(e) => setGridSize(parseFloat(e.target.value))}
+                         className="w-full accent-amber-400 h-1.5 bg-white/10 rounded-full appearance-none outline-none"
+                       />
+                       <p className="text-[10px] text-zinc-500 mt-1">Adjust to fit your physical cube size</p>
+                     </div>
+
+                     {/* Sensitivity */}
+                     <div>
+                       <div className="text-xs text-zinc-400 mb-2">Detection Sensitivity</div>
+                       <div className="flex gap-2">
+                         {["fast", "balanced", "high"].map(s => (
+                           <button 
+                             key={s}
+                             onClick={() => setSensitivity(s)}
+                             className={`flex-1 py-1.5 text-xs rounded-md capitalize font-medium transition-colors ${
+                               sensitivity === s 
+                                 ? "bg-white/10 text-white border border-white/20" 
+                                 : "bg-transparent text-zinc-500 hover:bg-white/5 border border-transparent"
+                             }`}
+                           >
+                             {s}
+                           </button>
+                         ))}
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+
+                 {/* Diagnostics */}
+                 <div className="manual-card">
+                   <div className="flex items-center justify-between mb-4">
+                     <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+                       <RiCheckLine className="w-4 h-4 text-zinc-400" />
+                       Detection Status
+                     </h3>
+                     {wsStatus === "error" && (
+                       <span className="text-xs text-red-400 font-medium bg-red-400/10 px-2 py-0.5 rounded-full">
+                         Connection Error
+                       </span>
+                     )}
+                   </div>
+                   
+                   <div className="space-y-4">
+                     {DIAGNOSTICS.map(({ key, label }) => (
+                       <div key={key} className="flex items-center justify-between">
+                         <span className="text-sm text-zinc-300">{label}</span>
+                         {renderStars(diagnostics?.[key] || 0)}
+                       </div>
+                     ))}
+                   </div>
+                   
+                   {wsError && (
+                     <div className="mt-4 p-2 rounded bg-red-500/10 border border-red-500/20 text-xs text-red-400">
+                       {wsError}
+                     </div>
+                   )}
+                 </div>
+
+              </div>
+            )}
+            
+          </motion.div>
+        )}
+
+        {/* ─── Mode: Completed ─── */}
+        {mode === "completed" && (
+          <motion.div
+            key="completed"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            {/* Split layout 60/40 */}
+            <div className="grid grid-cols-1 lg:grid-cols-[60%_1fr] gap-6 mb-8">
+              {/* 2D Map (60%) */}
+              <div className="manual-card h-full flex flex-col">
+                 <div className="text-sm font-semibold text-zinc-200 mb-4 flex items-center gap-2">
+                   <RiCheckLine className="text-zinc-400" />
+                   Final 2D Preview
+                 </div>
+                 <div className="flex-1 flex items-center justify-center p-4">
+                    <div className="w-full max-w-[420px] mx-auto">
+                      <CubeNet />
+                    </div>
+                 </div>
+              </div>
+
+              {/* 3D Map (40%) */}
+              <div className="manual-card h-full flex flex-col">
+                 <div className="text-sm font-semibold text-zinc-200 mb-4 flex items-center gap-2">
+                   <RiCameraLine className="text-zinc-400" />
+                   Final 3D Preview
+                 </div>
+                 <div className="flex-1 w-full flex items-center justify-center">
+                   <div className="w-full aspect-square max-w-[320px] bg-black/40 rounded-xl border border-white/5 shadow-inner flex items-center justify-center overflow-hidden">
+                      <Cube3D height="100%" autoRotate={true} />
+                   </div>
+                 </div>
+              </div>
+            </div>
+
+            <div className="glass-card p-8 text-center max-w-2xl mx-auto mb-8 relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-emerald-500" />
+              <h2 className="text-2xl font-bold mb-2">Scan Complete</h2>
+              
+              {!isValidated && (
+                <div className="mt-4 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-left">
+                  <div className="text-sm font-semibold text-red-400 mb-2">Validation Errors</div>
+                  <ul className="list-disc pl-5 text-sm text-red-400/90 space-y-1">
+                    {validationErrors.map((e, i) => <li key={i}>{e}</li>)}
+                  </ul>
+                  <button 
+                    onClick={() => setMode("scanning")}
+                    className="btn-secondary mt-4 flex items-center gap-2"
+                  >
+                    <RiEditLine className="w-4 h-4" /> Go Back to Edit
+                  </button>
+                </div>
+              )}
+
+              {isValidated && (
+                <p className="text-zinc-400 mb-8">
+                  Your cube has been successfully scanned and validated. Ready to solve?
+                </p>
+              )}
+
+              {isValidated && (
+                <div className="flex gap-4 justify-center">
+                  <button onClick={() => setMode("scanning")} className="btn-secondary">
+                    Go Back
+                  </button>
+                  <button onClick={handleSolve} disabled={isSolving} className="btn-primary flex items-center gap-2">
+                    {isSolving ? "Solving..." : "Solve Cube"}
+                    <RiArrowRightLine className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+            
+          </motion.div>
+        )}
+
       </AnimatePresence>
 
       <SolvingOverlay 
         isVisible={isSolving} 
         isComplete={isSolveComplete} 
         onComplete={handleOverlayComplete} 
-      />
-    </div>
-  );
-}
-
-function FaceUpload({ face, file, preview, onFile }) {
-  const inputRef = useRef(null);
-
-  return (
-    <div>
-      <div className="text-[10px] text-zinc-500 text-center mb-1 font-medium">
-        {FACE_LABELS[face]}
-      </div>
-      <button
-        onClick={() => inputRef.current?.click()}
-        className={`w-[120px] h-[120px] rounded-xl border-2 border-dashed transition-all overflow-hidden ${
-          file
-            ? "border-green-400/40 bg-green-400/5"
-            : "border-zinc-700 hover:border-zinc-500 bg-white/[0.02]"
-        }`}
-      >
-        {preview ? (
-          <img src={preview} alt={`Face ${face}`} className="w-full h-full object-cover" />
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full text-zinc-600">
-            <RiCameraLine className="w-6 h-6 mb-1" />
-            <span className="text-[10px]">{face}</span>
-          </div>
-        )}
-      </button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => onFile(face, e.target.files?.[0] || null)}
       />
     </div>
   );

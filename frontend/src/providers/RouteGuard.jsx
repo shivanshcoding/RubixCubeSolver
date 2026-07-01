@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 
-const PROTECTED_ROUTES = ["/dashboard", "/profile", "/contest", "/settings"];
+const PROTECTED_ROUTES = ["/dashboard", "/profile", "/contest", "/settings", "/cube"];
 
 export default function RouteGuard({ children }) {
   const pathname = usePathname();

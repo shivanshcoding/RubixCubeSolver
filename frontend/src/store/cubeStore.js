@@ -27,14 +27,14 @@ const FACE_LABELS = {
   L: "Left",
 };
 
-/** Create a solved (empty) cube state */
-function createSolvedFaces() {
+/** Create an empty cube state (only centers painted) */
+function createEmptyFaces() {
   const faces = {};
   for (const face of FACE_ORDER) {
     faces[face] = [
-      [face, face, face],
-      [face, face, face],
-      [face, face, face],
+      ["unknown", "unknown", "unknown"],
+      ["unknown", face, "unknown"],
+      ["unknown", "unknown", "unknown"],
     ];
   }
   return faces;
@@ -66,7 +66,7 @@ function toKociembaString(faces) {
 
 /** Convert Kociemba string to face notation */
 function fromKociembaString(cubeString) {
-  if (!cubeString || cubeString.length !== 54) return createSolvedFaces();
+  if (!cubeString || cubeString.length !== 54) return createEmptyFaces();
   const faces = {};
   let i = 0;
   for (const face of FACE_ORDER) {
@@ -105,7 +105,7 @@ function getPaletteList(colorMapping) {
 
 export const useCubeStore = create((set, get) => ({
   // ─── State ─────────────────────────────────────────
-  faces: createSolvedFaces(),
+  faces: createEmptyFaces(),
   colorMapping: { ...DEFAULT_COLOR_MAPPING },
   reverseMapping: buildReverseMapping(DEFAULT_COLOR_MAPPING),
   activeColor: "U",
@@ -118,6 +118,7 @@ export const useCubeStore = create((set, get) => ({
   isValidated: false,
   validationErrors: [],
   validationWarnings: [],
+  source: null,
 
   // Scan state
   scanStep: 0, // 0-5 for each face
@@ -235,6 +236,7 @@ export const useCubeStore = create((set, get) => ({
   setSolution: (solution) => set({ solution }),
   setSyntheticSolveTime: (time) => set({ syntheticSolveTime: time }),
   setIsSolving: (val) => set({ isSolving: val }),
+  setSource: (source) => set({ source }),
 
   // ─── Scan State ────────────────────────────────────
   setScanStep: (step) => set({ scanStep: step }),
@@ -247,7 +249,7 @@ export const useCubeStore = create((set, get) => ({
   // ─── Reset ─────────────────────────────────────────
   reset: () =>
     set({
-      faces: createSolvedFaces(),
+      faces: createEmptyFaces(),
       activeColor: "U",
       isValidated: false,
       validationErrors: [],
@@ -259,7 +261,7 @@ export const useCubeStore = create((set, get) => ({
 
   resetAll: () =>
     set({
-      faces: createSolvedFaces(),
+      faces: createEmptyFaces(),
       colorMapping: { ...DEFAULT_COLOR_MAPPING },
       reverseMapping: buildReverseMapping(DEFAULT_COLOR_MAPPING),
       activeColor: "U",

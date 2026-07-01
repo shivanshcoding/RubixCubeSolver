@@ -10,6 +10,42 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional
 
 
+def calculate_diagnostics(img: np.ndarray, pts: Optional[np.ndarray]) -> Dict[str, int]:
+    """Calculate image quality diagnostics (0-100 scale)."""
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    
+    # Lighting: 0=too dark/bright, 100=perfect (around 128)
+    mean_val = np.mean(gray)
+    lighting = int(100 - abs(128 - mean_val) * (100/128))
+    lighting = max(0, min(100, lighting))
+
+    # Sharpness: Variance of Laplacian (scale arbitrarily, assume >100 is sharp)
+    lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+    sharpness = min(100, int((lap_var / 500) * 100))
+
+    # Angle: based on contour if available
+    angle = 100
+    if pts is not None and len(pts) == 4:
+        # Calculate aspect ratio and squareness
+        d1 = np.linalg.norm(pts[0] - pts[1])
+        d2 = np.linalg.norm(pts[1] - pts[2])
+        if d1 > 0 and d2 > 0:
+            ratio = min(d1, d2) / max(d1, d2)
+            angle = int(ratio * 100)
+
+    # Glare: Percentage of overexposed pixels
+    glare_pixels = np.sum(gray > 240)
+    total_pixels = gray.size
+    glare_ratio = glare_pixels / total_pixels
+    glare = max(0, 100 - int(glare_ratio * 1000)) # 10% glare = 0 score
+
+    return {
+        "lighting": lighting,
+        "sharpness": sharpness,
+        "angle": angle,
+        "glare": glare
+    }
+
 # ─── Image Preprocessing ─────────────────────────────────────────
 
 def preprocess_image(img: np.ndarray) -> np.ndarray:
@@ -101,10 +137,11 @@ def detect_face_contour(img: np.ndarray) -> Optional[np.ndarray]:
 
 # ─── Sticker Extraction ──────────────────────────────────────────
 
-def extract_stickers(img: np.ndarray) -> List[np.ndarray]:
+def extract_stickers(img: np.ndarray) -> Tuple[List[np.ndarray], Optional[np.ndarray]]:
     """
     Warp detected face to flat 300x300 square and extract 9 patches.
     Uses perspective correction for angled photos.
+    Returns (patches, pts).
     """
     pts = detect_face_contour(img)
     if pts is None:
@@ -140,7 +177,7 @@ def extract_stickers(img: np.ndarray) -> List[np.ndarray]:
     if len(patches) != 9:
         raise ValueError("Failed to extract 9 sticker regions")
 
-    return patches
+    return patches, pts
 
 
 # ─── Color Classification ────────────────────────────────────────
@@ -360,7 +397,8 @@ async def scan_cube_from_images(
     # 2. Extract sticker patches
     face_patches = {}
     for f in face_order:
-        face_patches[f] = extract_stickers(faces[f])
+        patches, _ = extract_stickers(faces[f])
+        face_patches[f] = patches
 
     # 3. Calibrate colors from center stickers (LAB space)
     center_labs = {}
