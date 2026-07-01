@@ -1,78 +1,98 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+"""
+CubeVision AI — FastAPI Application
+
+Main entry point for the backend server.
+Configures middleware, routers, startup/shutdown events.
+"""
+
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Optional
-import time
+from fastapi.staticfiles import StaticFiles
+import os
 
-from .models.requests import SolveRequest, ValidateRequest
-from .models.responses import SolveResponse, ScanResponse, ValidateResponse
-from .services.solver_service import validate_cube_string, solve_cube
-from .services.vision_service import scan_cube_from_images
+from app.core.config import settings
+from app.database.connection import connect_to_database, close_database_connection
+from app.api.auth import router as auth_router
+from app.api.cube import router as cube_router
+from app.api.contest import router as contest_router
 
 
-app = FastAPI(title="Rubik's Cube Solver API", version="0.1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifecycle: startup and shutdown events."""
+    # Startup
+    await connect_to_database()
 
-# Allow local development origins
+    # Create upload directory
+    os.makedirs(settings.upload_dir, exist_ok=True)
+
+    print("=" * 50)
+    print("  CubeVision AI — Backend Server")
+    print(f"  MongoDB: {settings.mongodb_db_name}")
+    print(f"  Debug: {settings.debug}")
+    print(f"  LLM: {settings.llm_provider}")
+    print("=" * 50)
+
+    yield
+
+    # Shutdown
+    await close_database_connection()
+
+
+app = FastAPI(
+    title="CubeVision AI",
+    description="Production-grade Rubik's Cube platform with CV, solving, and gamification",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+# ─── CORS Middleware ──────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# ─── Routers ─────────────────────────────────────────────────────
+app.include_router(auth_router)
+app.include_router(cube_router)
+app.include_router(contest_router)
 
-@app.get("/health")
-def health() -> dict:
-    return {"status": "ok"}
 
+# ─── Health Check ─────────────────────────────────────────────────
 
-@app.post("/api/solve")
-def solve(request: SolveRequest) -> dict:
-    is_valid, error_msg = validate_cube_string(request.cubeString)
-    if not is_valid:
-        raise HTTPException(status_code=400, detail={"success": False, "error": error_msg})
-
-    start = time.perf_counter()
-    try:
-        moves: List[str] = solve_cube(request.cubeString)
-    except Exception as e:
-        raise HTTPException(status_code=422, detail={"success": False, "error": f"Solver failed: {str(e)}"})
-    elapsed_ms = int((time.perf_counter() - start) * 1000)
-
+@app.get("/health", tags=["System"])
+async def health_check():
+    """Health check endpoint."""
     return {
-        "success": True,
-        "solution": " ".join(moves),
-        "moves": moves,
-        "moveCount": len(moves),
-        "solveTimeMs": elapsed_ms,
+        "status": "healthy",
+        "service": "CubeVision AI",
+        "version": "1.0.0",
     }
 
 
-@app.post("/api/scan", response_model=ScanResponse)
-async def scan(
-    faceU: UploadFile = File(...),
-    faceR: UploadFile = File(...),
-    faceF: UploadFile = File(...),
-    faceD: UploadFile = File(...),
-    faceL: UploadFile = File(...),
-    faceB: UploadFile = File(...),
-) -> ScanResponse:
-    try:
-        cube_string, faces_data, conf_stats, palette = await scan_cube_from_images(
-            {"U": faceU, "R": faceR, "F": faceF, "D": faceD, "L": faceL, "B": faceB}
-        )
-        print(f"Confidence: {conf_stats}")
-        print(f"Cube String: {cube_string}")
+@app.get("/api/info", tags=["System"])
+async def api_info():
+    """API information."""
+    from app.solver.solver_factory import get_available_solvers
+    from app.cv.llm_provider import is_llm_available
 
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=422, detail={"error": str(e)})
-
-    return ScanResponse(
-        cubeString=cube_string,
-        faces=faces_data,
-        confidence=conf_stats,
-        palette=palette
-    )
-
+    return {
+        "name": "CubeVision AI",
+        "version": "1.0.0",
+        "solvers": get_available_solvers(),
+        "llm_available": is_llm_available(),
+        "features": [
+            "manual_entry",
+            "camera_scan",
+            "live_scan",
+            "3d_preview",
+            "solution_player",
+            "contests",
+            "leaderboard",
+            "achievements",
+        ],
+    }
