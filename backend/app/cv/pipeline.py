@@ -1,21 +1,36 @@
 """
 CubeVision AI — Computer Vision Pipeline
 
-Single source of truth for all CV operations:
-palette validation, patch cropping, preprocessing, color classification,
-temporal stabilization, and diagnostics.
-
-Both the live webcam scanner and upload image scanner share this pipeline.
+Simplified and robust pipeline for exact color preservation.
+Prioritizes center-cropping and raw color metrics over aggressive preprocessing.
 """
 
 import cv2
 import hashlib
 import json
 import time
+import os
 import numpy as np
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  Debug Configuration
+# ═══════════════════════════════════════════════════════════════════
+
+DEBUG_MODE = True
+DEBUG_INTERVAL_SECONDS = 5
+
+
+@dataclass
+class DebugState:
+    """Tracks state per session so we only trigger debug output periodically."""
+    last_debug_time: float = 0.0
+    frame_counter: int = 0
+    palette_logged: bool = False
+    frontend_debug_info: Optional[Dict] = None
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -26,16 +41,14 @@ from typing import Dict, List, Optional, Tuple
 class PipelineConfig:
     """All tunable CV parameters in one place."""
 
-    # ── Patch preprocessing ──────────────────────────────────────
-    median_blur_ksize: int = 5
-    clahe_clip_limit: float = 2.0
-    clahe_tile_size: Tuple[int, int] = (4, 4)
-    gamma: float = 1.0  # 1.0 = no correction
+    # ── Cropping & Preprocessing ─────────────────────────────────
+    center_crop_ratio: float = 0.55  # Crop the center 55% of the patch
+    median_blur_ksize: int = 3       # Lightweight blur, 0 to disable
 
     # ── Pixel filtering (HSV-domain) ─────────────────────────────
-    saturation_floor: int = 25      # discard near-grey pixels
-    value_ceiling: int = 245        # discard specular highlights
-    value_floor: int = 20           # discard deep shadows
+    # Relaxed thresholds to preserve true colors.
+    value_ceiling: int = 250        # discard extreme specular highlights
+    value_floor: int = 15           # discard extreme shadows
 
     # ── Palette validation (ΔE76 in CIE LAB) ────────────────────
     de_threshold_poor: float = 20.0
@@ -43,8 +56,7 @@ class PipelineConfig:
 
     # ── Temporal smoothing ───────────────────────────────────────
     temporal_window: int = 8        # rolling history length
-    temporal_majority: float = 0.6  # fraction required for stability
-    confidence_floor: float = 0.45  # minimum avg confidence for stable
+    temporal_majority_weight: float = 0.65  # fraction of weighted sum required for stability
 
     # ── Upload / perspective warp ────────────────────────────────
     warp_size: int = 300            # warped face is warp_size × warp_size
@@ -58,16 +70,15 @@ DEFAULT_CONFIG = PipelineConfig()
 #  Color-Space Utilities
 # ═══════════════════════════════════════════════════════════════════
 
-def hex_to_lab(hex_code: str) -> np.ndarray:
-    """Convert a '#RRGGBB' hex string to CIE LAB (float64, properly scaled).
-
-    OpenCV stores LAB as uint8 with L in [0, 255], a/b in [0, 255] centred
-    at 128.  We convert to standard CIE ranges: L [0, 100], a/b [−128, 127].
-    """
+def hex_to_rgb(hex_code: str) -> Tuple[int, int, int]:
     h = hex_code.lstrip("#")
     if len(h) != 6:
         raise ValueError(f"Invalid hex color: {hex_code}")
-    r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+def hex_to_lab(hex_code: str) -> np.ndarray:
+    """Convert a '#RRGGBB' hex string to CIE LAB (float64, properly scaled)."""
+    r, g, b = hex_to_rgb(hex_code)
     bgr = np.array([[[b, g, r]]], dtype=np.uint8)
     lab_cv = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)[0, 0]
     L = lab_cv[0] * (100.0 / 255.0)
@@ -77,23 +88,8 @@ def hex_to_lab(hex_code: str) -> np.ndarray:
 
 
 def delta_e_76(lab1: np.ndarray, lab2: np.ndarray) -> float:
-    """Euclidean distance in CIE LAB (ΔE76).
-
-    Computationally cheap and sufficient when palette colours are well-
-    separated.  For colours within ΔE < 5 the perceptual non-linearity
-    matters, but our palette validation rejects palettes that close.
-    """
+    """Euclidean distance in CIE LAB (ΔE76)."""
     return float(np.linalg.norm(lab1 - lab2))
-
-
-def _bgr_to_lab_float(bgr: np.ndarray) -> np.ndarray:
-    """Convert a single BGR pixel (uint8 or float) to CIE LAB float64."""
-    pixel = np.array([[bgr[:3]]], dtype=np.uint8)
-    lab_cv = cv2.cvtColor(pixel, cv2.COLOR_BGR2LAB)[0, 0]
-    L = lab_cv[0] * (100.0 / 255.0)
-    a = lab_cv[1] - 128.0
-    b = lab_cv[2] - 128.0
-    return np.array([L, a, b], dtype=np.float64)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -135,11 +131,7 @@ def validate_palette(
     palette: Dict[str, str],
     config: PipelineConfig = DEFAULT_CONFIG,
 ) -> Dict:
-    """Validate whether the six user-selected colours are suitable for CV.
-
-    Converts HEX → LAB, computes all 15 pairwise ΔE76 distances, and
-    returns status / diagnostics.
-    """
+    """Validate whether the six user-selected colours are suitable for CV."""
     FACE_LABELS = {"U": "Up", "D": "Down", "F": "Front", "B": "Back", "R": "Right", "L": "Left"}
 
     if not palette or len(palette) != 6:
@@ -158,7 +150,6 @@ def validate_palette(
             "distances": {}, "warnings": ["Two or more faces share the same colour."],
         }
 
-    # Convert
     try:
         labs = convert_palette_to_lab(palette)
     except ValueError as e:
@@ -169,7 +160,6 @@ def validate_palette(
             "distances": {}, "warnings": [str(e)],
         }
 
-    # Pairwise distances
     faces = list(labs.keys())
     distances: Dict[str, float] = {}
     all_dists: List[float] = []
@@ -231,11 +221,7 @@ def crop_patches(
     frame: np.ndarray,
     overlay_coords: List[List[int]],
 ) -> List[np.ndarray]:
-    """Crop 9 sticker regions from a BGR frame using overlay coordinates.
-
-    Each entry in *overlay_coords* is ``[x, y, w, h]``.
-    No preprocessing — pure cropping only.
-    """
+    """Crop 9 sticker regions from a BGR frame using overlay coordinates."""
     if len(overlay_coords) != 9:
         raise ValueError(f"Expected 9 coordinate regions, got {len(overlay_coords)}.")
 
@@ -250,148 +236,104 @@ def crop_patches(
 
         patch = frame[y1:y2, x1:x2]
         if patch.size == 0:
-            # Fallback: tiny black patch so downstream never crashes
             patch = np.zeros((10, 10, 3), dtype=np.uint8)
         patches.append(patch)
 
     return patches
 
+def _crop_center(patch: np.ndarray, config: PipelineConfig = DEFAULT_CONFIG) -> np.ndarray:
+    """Crops the central region of the patch to exclude borders and shadows."""
+    h, w = patch.shape[:2]
+    ratio = config.center_crop_ratio
+    
+    new_h = int(h * ratio)
+    new_w = int(w * ratio)
+    
+    start_y = (h - new_h) // 2
+    start_x = (w - new_w) // 2
+    
+    center_patch = patch[start_y:start_y + new_h, start_x:start_x + new_w]
+    if center_patch.size == 0:
+        return np.zeros((5, 5, 3), dtype=np.uint8)
+    return center_patch
+
 
 # ═══════════════════════════════════════════════════════════════════
-#  Patch Preprocessing  (split into reusable sub-functions)
+#  Patch Preprocessing
 # ═══════════════════════════════════════════════════════════════════
-
-def white_balance(patch: np.ndarray) -> np.ndarray:
-    """Gray-world white balance on a BGR patch."""
-    result = patch.astype(np.float32)
-    avg_b = np.mean(result[:, :, 0])
-    avg_g = np.mean(result[:, :, 1])
-    avg_r = np.mean(result[:, :, 2])
-    avg = (avg_b + avg_g + avg_r) / 3.0
-
-    result[:, :, 0] *= avg / (avg_b + 1e-6)
-    result[:, :, 1] *= avg / (avg_g + 1e-6)
-    result[:, :, 2] *= avg / (avg_r + 1e-6)
-
-    return np.clip(result, 0, 255).astype(np.uint8)
-
-
-def normalize_brightness(patch: np.ndarray, config: PipelineConfig = DEFAULT_CONFIG) -> np.ndarray:
-    """CLAHE on the L channel for local brightness normalization."""
-    lab = cv2.cvtColor(patch, cv2.COLOR_BGR2LAB)
-    l_ch, a_ch, b_ch = cv2.split(lab)
-    clahe = cv2.createCLAHE(
-        clipLimit=config.clahe_clip_limit,
-        tileGridSize=config.clahe_tile_size,
-    )
-    l_ch = clahe.apply(l_ch)
-    lab = cv2.merge([l_ch, a_ch, b_ch])
-    return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
-
-
-def gamma_correct(patch: np.ndarray, gamma: float = 1.0) -> np.ndarray:
-    """Apply gamma correction.  gamma=1.0 is a no-op."""
-    if abs(gamma - 1.0) < 1e-4:
-        return patch
-    inv_gamma = 1.0 / gamma
-    table = np.array(
-        [(i / 255.0) ** inv_gamma * 255 for i in range(256)],
-        dtype=np.uint8,
-    )
-    return cv2.LUT(patch, table)
-
 
 def remove_glare_and_shadows(
-    patch: np.ndarray,
+    hsv_patch: np.ndarray,
     config: PipelineConfig = DEFAULT_CONFIG,
-) -> Tuple[np.ndarray, np.ndarray]:
-    """Mask out specular highlights and deep shadows in HSV domain.
-
-    Returns (masked_patch, validity_mask) where masked pixels are zeroed
-    and validity_mask is uint8 with 255 = valid, 0 = rejected.
-    """
-    hsv = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV)
-    v_ch = hsv[:, :, 2]
-
+) -> np.ndarray:
+    """Lightweight masking: only discard extreme highlights and extreme shadows."""
+    v_ch = hsv_patch[:, :, 2]
     valid = np.ones(v_ch.shape, dtype=np.uint8) * 255
-    valid[v_ch > config.value_ceiling] = 0   # glare
-    valid[v_ch < config.value_floor] = 0     # deep shadow
-
-    masked = cv2.bitwise_and(patch, patch, mask=valid)
-    return masked, valid
-
-
-def remove_low_saturation(
-    patch: np.ndarray,
-    mask: np.ndarray,
-    config: PipelineConfig = DEFAULT_CONFIG,
-) -> Tuple[np.ndarray, np.ndarray]:
-    """Further mask out near-grey (low saturation) pixels.
-
-    Operates on an already-masked patch; updates the validity mask in place.
-    """
-    hsv = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV)
-    s_ch = hsv[:, :, 1]
-
-    low_sat = s_ch < config.saturation_floor
-    mask[low_sat] = 0
-
-    masked = cv2.bitwise_and(patch, patch, mask=mask)
-    return masked, mask
+    valid[v_ch > config.value_ceiling] = 0   # extreme glare
+    valid[v_ch < config.value_floor] = 0     # extreme shadow
+    return valid
 
 
 def preprocess_patch(
     patch: np.ndarray,
     config: PipelineConfig = DEFAULT_CONFIG,
-) -> Tuple[np.ndarray, np.ndarray]:
-    """Full preprocessing pipeline for a single sticker patch.
-
-    Pipeline:
-        Median Blur → White Balance → Brightness Normalization →
-        Gamma Correction → Remove Glare / Shadows → Remove Low Saturation
-
+) -> Tuple[np.ndarray, np.ndarray, Dict]:
+    """Simplified preprocessing pipeline for a single center-cropped sticker patch.
     Returns:
-        (cleaned_patch, validity_mask)
-        where validity_mask has 255 for usable pixels, 0 for rejected.
+        (bgr_patch, validity_mask, prep_stats)
     """
-    p = cv2.medianBlur(patch, config.median_blur_ksize)
-    p = white_balance(p)
-    p = normalize_brightness(p, config)
-    p = gamma_correct(p, config.gamma)
-    p, mask = remove_glare_and_shadows(p, config)
-    p, mask = remove_low_saturation(p, mask, config)
-    return p, mask
+    stats = {}
+    
+    t0 = time.perf_counter()
+    if config.median_blur_ksize > 0:
+        p = cv2.medianBlur(patch, config.median_blur_ksize)
+    else:
+        p = patch.copy()
+    stats["blur_ms"] = (time.perf_counter() - t0) * 1000
+    stats["blur_ksize"] = config.median_blur_ksize
+    
+    t0 = time.perf_counter()
+    hsv = cv2.cvtColor(p, cv2.COLOR_BGR2HSV)
+    mask = remove_glare_and_shadows(hsv, config)
+    stats["mask_ms"] = (time.perf_counter() - t0) * 1000
+    
+    return p, mask, stats
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  Representative Colour
+#  Representative Colour (Median)
 # ═══════════════════════════════════════════════════════════════════
 
 def representative_color(
-    patch: np.ndarray,
+    bgr_patch: np.ndarray,
     mask: np.ndarray,
 ) -> Dict[str, np.ndarray]:
-    """Compute one representative colour from the valid (unmasked) pixels.
+    """Compute the Median BGR of the valid pixels, then convert directly to LAB."""
+    valid_pixels = bgr_patch[mask > 0]
 
-    Uses **median** (robust to outliers) instead of mean.
-    Returns ``{"bgr": ..., "hsv": ..., "lab": ...}`` as float64 arrays.
-    """
-    valid_pixels = patch[mask > 0]
-
+    # Fallback if too few pixels survived masking
     if len(valid_pixels) < 5:
-        # Fallback: use all pixels if mask rejected too many
-        valid_pixels = patch.reshape(-1, 3)
+        valid_pixels = bgr_patch.reshape(-1, 3)
 
-    bgr_med = np.median(valid_pixels, axis=0).astype(np.uint8)
-
-    # Convert representative pixel to HSV & LAB
-    pixel_bgr = np.array([[bgr_med]], dtype=np.uint8)
-    hsv_med = cv2.cvtColor(pixel_bgr, cv2.COLOR_BGR2HSV)[0, 0]
-    lab_float = _bgr_to_lab_float(bgr_med)
+    # Simple median is robust to noise and slight glare/shadow variation
+    bgr_med = np.median(valid_pixels, axis=0).astype(np.float64)
+    
+    # Convert BGR float to LAB float
+    # We create a 1x1 uint8 image to use OpenCV's conversion, then scale correctly
+    bgr_uint8 = np.array([[[int(bgr_med[0]), int(bgr_med[1]), int(bgr_med[2])]]], dtype=np.uint8)
+    
+    hsv_cv = cv2.cvtColor(bgr_uint8, cv2.COLOR_BGR2HSV)[0, 0]
+    hsv_med = hsv_cv.astype(np.float64)
+    
+    lab_cv = cv2.cvtColor(bgr_uint8, cv2.COLOR_BGR2LAB)[0, 0]
+    L = lab_cv[0] * (100.0 / 255.0)
+    a = lab_cv[1] - 128.0
+    b = lab_cv[2] - 128.0
+    lab_float = np.array([L, a, b], dtype=np.float64)
 
     return {
-        "bgr": bgr_med.astype(np.float64),
-        "hsv": hsv_med.astype(np.float64),
+        "bgr": bgr_med,
+        "hsv": hsv_med,
         "lab": lab_float,
     }
 
@@ -403,12 +345,10 @@ def representative_color(
 def classify_patch(
     rep_lab: np.ndarray,
     palette_labs: Dict[str, np.ndarray],
+    config: PipelineConfig = DEFAULT_CONFIG,
 ) -> Dict:
-    """Classify a sticker into one of U/R/F/D/L/B via nearest palette colour.
-
-    Confidence = (d2 − d1) / (d2 + d1 + ε)
-    where d1, d2 are distances to nearest and second-nearest.
-    Result is 0 when equidistant, approaches 1 when d1 ≪ d2.
+    """Classify a sticker via nearest palette colour in LAB space.
+    Confidence is simply (d2 - d1) / (d2 + d1).
     """
     dists = {face: delta_e_76(rep_lab, ref) for face, ref in palette_labs.items()}
     sorted_faces = sorted(dists, key=dists.get)
@@ -416,18 +356,22 @@ def classify_patch(
     d1 = dists[sorted_faces[0]]
     d2 = dists[sorted_faces[1]] if len(sorted_faces) > 1 else d1 + 1.0
 
+    # Relative confidence (normalized difference)
     confidence = (d2 - d1) / (d2 + d1 + 1e-6)
     confidence = max(0.0, min(1.0, confidence))
 
     return {
         "face": sorted_faces[0],
+        "runner_up": sorted_faces[1] if len(sorted_faces) > 1 else "None",
         "confidence": round(confidence, 3),
         "delta_e": round(d1, 1),
+        "runner_up_delta_e": round(d2, 1),
+        "all_dists": dists,
     }
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  Temporal Smoothing
+#  Temporal Smoothing (Weighted Voting)
 # ═══════════════════════════════════════════════════════════════════
 
 @dataclass
@@ -439,37 +383,28 @@ class _StickerFrame:
 
 
 class TemporalSmoother:
-    """Per-sticker rolling-window majority-vote stabilisation.
-
-    Stores ``{face, confidence, timestamp}`` per sticker per frame.
-    A sticker is stable when:
-      1. The most-frequent label has ≥ ``majority`` fraction of the window.
-      2. The average confidence of those agreeing frames ≥ ``confidence_floor``.
+    """Per-sticker rolling-window weighted majority-vote stabilisation.
+    Stability is determined exclusively by majority vote, disregarding confidence.
     """
 
     def __init__(self, config: PipelineConfig = DEFAULT_CONFIG) -> None:
         self.window = config.temporal_window
-        self.majority = config.temporal_majority
-        self.conf_floor = config.confidence_floor
-        # 9 independent deques, one per sticker position
+        self.majority_weight = config.temporal_majority_weight
         self._history: List[deque] = [deque(maxlen=self.window) for _ in range(9)]
+        
+        # Exponential weights, most recent = highest
+        decay = 0.8
+        self._weights = [decay ** i for i in reversed(range(self.window))]
 
     def update(
         self,
         classifications: List[Dict],
-    ) -> Tuple[bool, List[bool], List[str]]:
-        """Push a new frame and return stability results.
-
-        Args:
-            classifications: list of 9 dicts with keys ``face``, ``confidence``.
-
-        Returns:
-            (face_stable, [sticker_stable × 9], [stable_label × 9])
-        """
+    ) -> Tuple[bool, List[bool], List[str], List[Dict]]:
+        """Push a new frame and return stability results + debug info."""
         now = time.monotonic()
 
         if len(classifications) != 9:
-            return False, [False] * 9, ["unknown"] * 9
+            return False, [False] * 9, ["unknown"] * 9, []
 
         for i, cls in enumerate(classifications):
             self._history[i].append(_StickerFrame(
@@ -480,31 +415,50 @@ class TemporalSmoother:
 
         stable_flags: List[bool] = []
         stable_labels: List[str] = []
+        debug_info: List[Dict] = []
 
         for i in range(9):
             buf = self._history[i]
-            if len(buf) < max(3, int(self.window * self.majority)):
+            n = len(buf)
+            if n < max(3, int(self.window * 0.5)):
                 stable_flags.append(False)
                 stable_labels.append(buf[-1].face if buf else "unknown")
+                debug_info.append({"history": [e.face for e in buf], "majority": "unknown", "majority_pct": 0.0, "avg_conf": 0.0, "stable": False})
                 continue
 
-            # Count occurrences
-            counts: Dict[str, List[float]] = {}
-            for entry in buf:
-                counts.setdefault(entry.face, []).append(entry.confidence)
+            # Align weights to current buffer size
+            w = self._weights[-n:]
+            total_weight = sum(w)
+            
+            # Weighted vote counting
+            vote_weights: Dict[str, float] = {}
+            vote_confs: Dict[str, List[float]] = {}
+            
+            for j, entry in enumerate(buf):
+                vote_weights[entry.face] = vote_weights.get(entry.face, 0.0) + w[j]
+                vote_confs.setdefault(entry.face, []).append(entry.confidence)
 
-            # Find majority label
-            best_label = max(counts, key=lambda k: len(counts[k]))
-            best_count = len(counts[best_label])
-            fraction = best_count / len(buf)
-            avg_conf = float(np.mean(counts[best_label]))
+            # Find majority label by highest weighted sum
+            best_label = max(vote_weights, key=vote_weights.get)
+            label_weight = vote_weights[best_label]
+            fraction = label_weight / total_weight
+            avg_conf = float(np.mean(vote_confs[best_label]))
 
-            is_stable = fraction >= self.majority and avg_conf >= self.conf_floor
+            # Stability depends purely on the voting fraction now
+            is_stable = fraction >= self.majority_weight
             stable_flags.append(is_stable)
             stable_labels.append(best_label if is_stable else buf[-1].face)
+            
+            debug_info.append({
+                "history": [e.face for e in buf],
+                "majority": best_label,
+                "majority_pct": fraction * 100.0,
+                "avg_conf": avg_conf,
+                "stable": is_stable
+            })
 
         face_stable = all(stable_flags)
-        return face_stable, stable_flags, stable_labels
+        return face_stable, stable_flags, stable_labels, debug_info
 
     def reset(self) -> None:
         """Clear all history."""
@@ -517,55 +471,304 @@ class TemporalSmoother:
 # ═══════════════════════════════════════════════════════════════════
 
 def calculate_diagnostics(frame: np.ndarray) -> Dict[str, int]:
-    """Calculate image-level quality diagnostics on a 0–100 scale.
-
-    No contour detection required — operates on the raw frame.
-    """
+    """Calculate image-level quality diagnostics on a 0–100 scale."""
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-    # Lighting: deviation from ideal mid-grey (128)
     mean_val = float(np.mean(gray))
     lighting = int(100 - abs(128 - mean_val) * (100 / 128))
     lighting = max(0, min(100, lighting))
 
-    # Sharpness: variance of Laplacian
     lap_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
     sharpness = min(100, int((lap_var / 500) * 100))
 
-    # Glare: fraction of overexposed pixels
     glare_ratio = float(np.sum(gray > 240)) / gray.size
-    glare = max(0, 100 - int(glare_ratio * 1000))  # 10 % glare → score 0
+    glare = max(0, 100 - int(glare_ratio * 1000)) 
 
     return {
         "lighting": lighting,
         "sharpness": sharpness,
-        "angle": 100,  # no contour-based angle check for live scanning
+        "angle": 100,  
         "glare": glare,
     }
 
 
-def _sticker_diagnostics(
-    patch: np.ndarray,
-    mask: np.ndarray,
-    classification: Dict,
-) -> Dict:
-    """Per-sticker diagnostics for backend debugging.
+def _compute_color_stats(bgr_patch: np.ndarray, mask: Optional[np.ndarray] = None) -> Dict:
+    """Computes median BGR for a given patch and optional mask."""
+    if mask is not None:
+        valid_pixels = bgr_patch[mask > 0]
+        if len(valid_pixels) == 0:
+            valid_pixels = bgr_patch.reshape(-1, 3)
+    else:
+        valid_pixels = bgr_patch.reshape(-1, 3)
+        
+    bgr_median = np.median(valid_pixels, axis=0)
+    return {"bgr_median": bgr_median}
 
-    These are returned in the response but the frontend may ignore them.
-    """
+
+def _sticker_diagnostics(
+    raw_patch: np.ndarray,
+    bgr_patch: np.ndarray,
+    mask: np.ndarray,
+    rep: Dict[str, np.ndarray],
+    classification: Dict,
+    prep_stats: Dict
+) -> Dict:
+    """Detailed per-sticker diagnostics including medians and pixel retention."""
     total = mask.size
     valid = int(np.sum(mask > 0))
+    
+    raw_stats = _compute_color_stats(raw_patch)
+    proc_stats = _compute_color_stats(bgr_patch, mask)
+
     return {
         "valid_pixels": valid,
         "total_pixels": total,
         "mask_ratio": round(valid / (total + 1e-6), 3),
         "delta_e": classification.get("delta_e", 0.0),
+        "classified_face": classification.get("face", "unknown"),
+        "raw_stats": raw_stats,
+        "proc_stats": proc_stats,
+        "prep_stats": prep_stats
     }
 
 
 # ═══════════════════════════════════════════════════════════════════
 #  Main Pipeline — process_patches()
 # ═══════════════════════════════════════════════════════════════════
+
+def _generate_debug_output(
+    frame: np.ndarray,
+    fps: float,
+    debug_state: DebugState,
+    palette_hex: Dict[str, str],
+    palette_labs: Dict[str, np.ndarray],
+    overlay_coords: List[List[int]],
+    raw_patches: List[np.ndarray],
+    center_patches: List[np.ndarray],
+    processed_patches: List[np.ndarray],
+    masks: List[np.ndarray],
+    classifications: List[Dict],
+    reps: List[Dict],
+    sticker_diags: List[Dict],
+    stable_labels: List[str],
+    square_stable: List[bool],
+    diagnostics: Dict[str, int],
+    temporal_debug: List[Dict],
+    timings: Dict[str, float]
+):
+    """Generates the extensive debug output and saves images/collage in a dedicated folder."""
+    print("\n" + "═" * 70)
+    print(f"{'CubeVision AI - CV Pipeline Debug':^70}")
+    print("═" * 70)
+
+    if not debug_state.palette_logged:
+        print("\nFRONTEND PALETTE CONVERSION")
+        for face, hx in palette_hex.items():
+            rgb = hex_to_rgb(hx)
+            bgr = rgb[::-1]
+            lab = hex_to_lab(hx)
+            print(f"{face} : HEX {hx} ↓ RGB {rgb} ↓ BGR {bgr} ↓ LAB [{lab[0]:.1f}, {lab[1]:.1f}, {lab[2]:.1f}]")
+        debug_state.palette_logged = True
+        print("═" * 70)
+
+    h_img, w_img = frame.shape[:2]
+    print(f"\nFRAME\nResolution : {w_img} x {h_img}\nFrame # : {debug_state.frame_counter}\nFPS : {fps:.1f}\n")
+    
+    if debug_state.frontend_debug_info:
+        fdi = debug_state.frontend_debug_info
+        print("COORDINATE TRANSFORMATION (DOM PROJECTION)")
+        print(f"Camera Resolution      : {fdi.get('camera_resolution', {}).get('w')} x {fdi.get('camera_resolution', {}).get('h')}")
+        print(f"Video Element DOM      : {fdi.get('video_element', {}).get('w', 0):.1f} x {fdi.get('video_element', {}).get('h', 0):.1f}")
+        print(f"Rendered Video DOM     : {fdi.get('rendered_video', {}).get('w', 0):.1f} x {fdi.get('rendered_video', {}).get('h', 0):.1f}")
+        print(f"Grid Element DOM       : {fdi.get('grid_element', {}).get('w', 0):.1f} x {fdi.get('grid_element', {}).get('h', 0):.1f}")
+        print(f"Canvas Sent To Backend : {fdi.get('canvas_sent', {}).get('w')} x {fdi.get('canvas_sent', {}).get('h')}")
+        print(f"DOM to Video Scale     : {fdi.get('dom_to_video_scale', 0):.4f}")
+        print(f"Canvas Downscale       : {fdi.get('canvas_scale', 0):.4f}")
+        print("═" * 70)
+    
+    # Overlay Image
+    overlay_img = frame.copy()
+    frontend_overlay = frame.copy()
+    
+    for i, diag in enumerate(sticker_diags):
+        print(f"PATCH {i+1}")
+        
+        # Coordinates
+        x, y, w, h = overlay_coords[i]
+        print(f"Coordinates: x={x}, y={y}, width={w}, height={h}")
+        cv2.rectangle(overlay_img, (x, y), (x+w, y+h), (0, 255, 0), 2)
+        cv2.putText(overlay_img, str(i+1), (x+5, y+25), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+        
+        # Draw on frontend overlay
+        cv2.rectangle(frontend_overlay, (x, y), (x+w, y+h), (0, 0, 255), 2) # Full cell in red
+        
+        # Draw the center crop (green)
+        c_patch = center_patches[i]
+        ch, cw = c_patch.shape[:2]
+        cx = x + (w - cw) // 2
+        cy = y + (h - ch) // 2
+        cv2.rectangle(frontend_overlay, (cx, cy), (cx+cw, cy+ch), (0, 255, 0), 2) # Center crop in green
+        
+        raw_s = diag['raw_stats']
+        proc_s = diag['proc_stats']
+        print(f"\nRAW Median BGR    : [{raw_s['bgr_median'][0]:.1f}, {raw_s['bgr_median'][1]:.1f}, {raw_s['bgr_median'][2]:.1f}]")
+        print(f"Center Median BGR : [{proc_s['bgr_median'][0]:.1f}, {proc_s['bgr_median'][1]:.1f}, {proc_s['bgr_median'][2]:.1f}]")
+
+        prep = diag['prep_stats']
+        print(f"\nPREPROCESSING STAGES")
+        print(f"Median Blur Kernel               : {prep['blur_ksize']} ({prep['blur_ms']:.2f} ms)")
+        print(f"Mask Application                 : ({prep['mask_ms']:.2f} ms)")
+        print(f"Valid Pixels                     : {diag['valid_pixels']}")
+        print(f"Rejected Pixels                  : {diag['total_pixels'] - diag['valid_pixels']}")
+        print(f"Mask Ratio                       : {diag['mask_ratio'] * 100:.1f}%")
+
+        rep = reps[i]
+        print(f"\nREPRESENTATIVE COLOUR")
+        print(f"BGR : [{rep['bgr'][0]:.1f}, {rep['bgr'][1]:.1f}, {rep['bgr'][2]:.1f}]")
+        print(f"LAB : [{rep['lab'][0]:.1f}, {rep['lab'][1]:.1f}, {rep['lab'][2]:.1f}]")
+        
+        cls = classifications[i]
+        print("\nDISTANCE TO PALETTE")
+        sorted_dists = sorted(cls['all_dists'].items(), key=lambda item: item[1])
+        for face, dist in sorted_dists:
+            print(f"{face} : {dist:.1f}")
+            
+        print(f"\nCLASSIFICATION REASON")
+        print(f"Nearest Colour   : {cls['face']} (ΔE = {cls['delta_e']:.1f})")
+        print(f"Second Nearest   : {cls['runner_up']} (ΔE = {cls['runner_up_delta_e']:.1f})")
+        print(f"Difference       : {(cls['runner_up_delta_e'] - cls['delta_e']):.1f}")
+        print(f"Confidence Formula : (d2 - d1) / (d2 + d1) = ({cls['runner_up_delta_e']:.1f} - {cls['delta_e']:.1f}) / ({cls['runner_up_delta_e']:.1f} + {cls['delta_e']:.1f})")
+        print(f"Confidence       : {cls['confidence']:.2f}")
+        print(f"Decision         : {cls['face']} selected because it has the minimum perceptual colour distance.")
+        
+        t_dbg = temporal_debug[i]
+        print(f"\nTEMPORAL HISTORY")
+        print(f"History            : {' '.join(t_dbg['history'])}")
+        print(f"Majority           : {t_dbg['majority']}")
+        print(f"Majority %         : {t_dbg['majority_pct']:.1f}%")
+        print(f"Average Confidence : {t_dbg['avg_conf']:.2f}")
+        print(f"Stable             : {'YES' if t_dbg['stable'] else 'NO'}\n")
+        print("-" * 70)
+        
+    print("PIPELINE SUMMARY")
+    
+    # Heuristics
+    issues = []
+    
+    # 1. Are all faces classified as the same color?
+    winner_faces = [c['face'] for c in classifications]
+    if len(set(winner_faces)) == 1:
+        issues.append(f"All stickers classified as {winner_faces[0]}. Colors are blending together or validation masking is failing.")
+        
+    # 2. Are confidences exceptionally low?
+    avg_conf = np.mean([c['confidence'] for c in classifications])
+    if avg_conf < 0.2:
+        issues.append("Average confidence is very low (< 0.2). The patches are almost equidistant to multiple palette colors. Consider recalibrating.")
+        
+    # 3. Are masking ratios too low?
+    low_masks = [i for i, d in enumerate(sticker_diags) if d['mask_ratio'] < 0.2]
+    if low_masks:
+        issues.append(f"Stickers {low_masks} have a mask ratio < 20%. The environment might be too dark or too glary, removing valid color data.")
+
+    # 4. Are palette colors too close?
+    palette_dist_too_close = False
+    faces = list(palette_labs.keys())
+    for i in range(len(faces)):
+        for j in range(i + 1, len(faces)):
+            d = delta_e_76(palette_labs[faces[i]], palette_labs[faces[j]])
+            if d < 15.0:
+                palette_dist_too_close = True
+                
+    if palette_dist_too_close:
+        issues.append("Some palette colors have a ΔE < 15.0. They are too similar to distinguish reliably.")
+        
+    print(f"Representative colours appear reasonable : {'NO' if len(set(winner_faces)) == 1 else 'YES'}")
+    print(f"Palette conversion appears correct       : {'NO' if palette_dist_too_close else 'YES'}")
+    print(f"Confidence computation appears reasonable: {'NO' if avg_conf < 0.2 else 'YES'}")
+    
+    face_stable = all(square_stable)
+    print(f"Temporal smoother functioning            : {'YES' if face_stable else 'NO'}")
+    
+    print("\nPotential Problems")
+    if not issues:
+        print("• None detected. Pipeline running nominally.")
+    else:
+        for issue in issues:
+            print(f"• {issue}")
+
+    print("\n" + "═" * 70 + "\n")
+
+    # Image Saving in a dedicated frame folder
+    frame_dir = f"debug/frame_{debug_state.frame_counter}"
+    os.makedirs(frame_dir, exist_ok=True)
+    
+    cv2.imwrite(os.path.join(frame_dir, "frame.jpg"), frame)
+    cv2.imwrite(os.path.join(frame_dir, "overlay.jpg"), overlay_img)
+    cv2.imwrite(os.path.join(frame_dir, "frontend_overlay.jpg"), frontend_overlay)
+    
+    for i, (r_patch, c_patch, p_patch, m_patch) in enumerate(zip(raw_patches, center_patches, processed_patches, masks)):
+        cv2.imwrite(os.path.join(frame_dir, f"patch_{i+1}_raw.jpg"), r_patch)
+        cv2.imwrite(os.path.join(frame_dir, f"patch_{i+1}_center.jpg"), c_patch)
+        
+        # Valid pixels image (blacked out invalid pixels)
+        valid_img = cv2.bitwise_and(p_patch, p_patch, mask=m_patch)
+        cv2.imwrite(os.path.join(frame_dir, f"patch_{i+1}_valid_pixels.jpg"), valid_img)
+        cv2.imwrite(os.path.join(frame_dir, f"patch_{i+1}_mask.jpg"), m_patch)
+        
+    # Collage Generation
+    try:
+        pw, ph = 60, 60
+        collage_rows = []
+        
+        # Row 1: Original frame (scaled down)
+        scale = (pw*9) / frame.shape[1]
+        small_frame = cv2.resize(frame, (0,0), fx=scale, fy=scale)
+        padded_frame = np.zeros((ph, pw*9, 3), dtype=np.uint8)
+        ch = min(ph, small_frame.shape[0])
+        padded_frame[:ch, :small_frame.shape[1]] = small_frame[:ch]
+        collage_rows.append(padded_frame)
+        
+        # Row 2: Overlay
+        small_overlay = cv2.resize(overlay_img, (0,0), fx=scale, fy=scale)
+        padded_overlay = np.zeros((ph, pw*9, 3), dtype=np.uint8)
+        padded_overlay[:ch, :small_overlay.shape[1]] = small_overlay[:ch]
+        collage_rows.append(padded_overlay)
+        
+        # Row 3: Raw patches
+        row_imgs = np.hstack([cv2.resize(p, (pw, ph)) for p in raw_patches])
+        collage_rows.append(row_imgs)
+
+        # Row 4: Center patches
+        row_imgs = np.hstack([cv2.resize(p, (pw, ph)) for p in center_patches])
+        collage_rows.append(row_imgs)
+        
+        # Row 5: Processed Valid Pixels patches
+        row_imgs = []
+        for p_bgr, m in zip(processed_patches, masks):
+            valid_bgr = cv2.bitwise_and(p_bgr, p_bgr, mask=m)
+            row_imgs.append(cv2.resize(valid_bgr, (pw, ph)))
+        collage_rows.append(np.hstack(row_imgs))
+        
+        # Row 6: Rep colors
+        row_imgs = []
+        for rep in reps:
+            bgr_col = np.zeros((ph, pw, 3), dtype=np.uint8)
+            bgr_col[:] = rep["bgr"].astype(np.uint8)
+            row_imgs.append(bgr_col)
+        collage_rows.append(np.hstack(row_imgs))
+        
+        # Row 7: Text classification
+        row_imgs = []
+        for label in stable_labels:
+            txt_img = np.zeros((ph, pw, 3), dtype=np.uint8)
+            cv2.putText(txt_img, label, (15, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2)
+            row_imgs.append(txt_img)
+        collage_rows.append(np.hstack(row_imgs))
+        
+        collage = np.vstack(collage_rows)
+        cv2.imwrite(os.path.join(frame_dir, "debug_collage.jpg"), collage)
+    except Exception as e:
+        print(f"Failed to generate collage: {e}")
 
 def process_patches(
     frame: np.ndarray,
@@ -574,39 +777,51 @@ def process_patches(
     smoother: TemporalSmoother,
     palette_cache: PaletteCache,
     config: PipelineConfig = DEFAULT_CONFIG,
+    fps: float = 0.0,
+    debug_state: Optional[DebugState] = None,
 ) -> Dict:
-    """Unified pipeline used by both live scanning and upload scanning.
-
-    1. Crop patches from the frame.
-    2. Preprocess each patch.
-    3. Extract representative colour.
-    4. Classify against the palette.
-    5. Temporal update.
-    6. Compute diagnostics.
-
-    Returns a dict ready to be JSON-serialised and sent to the frontend.
-    """
-    # Palette (cached conversion)
+    """Unified pipeline used by both live scanning and upload scanning."""
+    timings = {}
+    
+    t0 = time.perf_counter()
     palette_labs = palette_cache.get(palette_hex)
+    raw_patches = crop_patches(frame, overlay_coords)
+    
+    # 2. Extract Center 50-60%
+    center_patches = [_crop_center(p, config) for p in raw_patches]
+    timings["Crop"] = time.perf_counter() - t0
 
-    # Crop
-    patches = crop_patches(frame, overlay_coords)
-
-    # Per-sticker processing
     classifications: List[Dict] = []
     sticker_diags: List[Dict] = []
+    processed_patches: List[np.ndarray] = []
+    masks: List[np.ndarray] = []
+    reps: List[Dict] = []
 
-    for patch in patches:
-        cleaned, mask = preprocess_patch(patch, config)
-        rep = representative_color(cleaned, mask)
-        cls = classify_patch(rep["lab"], palette_labs)
+    t0 = time.perf_counter()
+    for i, c_patch in enumerate(center_patches):
+        # 3. Preprocess (Blur + Glare/Shadow masking)
+        bgr_cleaned, mask, prep_stats = preprocess_patch(c_patch, config)
+        processed_patches.append(bgr_cleaned)
+        masks.append(mask)
+        
+        # 4. Representative Colour (Median BGR of valid pixels)
+        rep = representative_color(bgr_cleaned, mask)
+        reps.append(rep)
+        
+        # 5. Classification
+        cls = classify_patch(rep["lab"], palette_labs, config)
         classifications.append(cls)
-        sticker_diags.append(_sticker_diagnostics(patch, mask, cls))
+        
+        # 6. Diagnostics
+        diag = _sticker_diagnostics(raw_patches[i], bgr_cleaned, mask, rep, cls, prep_stats)
+        sticker_diags.append(diag)
+    timings["PreprocessingAndClassification"] = time.perf_counter() - t0
 
-    # Temporal smoothing
-    face_stable, square_stable, stable_labels = smoother.update(classifications)
+    t0 = time.perf_counter()
+    # 7. Temporal Smoothing
+    face_stable, square_stable, stable_labels, temporal_debug = smoother.update(classifications)
+    timings["Temporal"] = time.perf_counter() - t0
 
-    # Build sticker response (matches existing frontend contract)
     stickers = []
     for i, cls in enumerate(classifications):
         label = stable_labels[i] if square_stable[i] else cls["face"]
@@ -617,8 +832,24 @@ def process_patches(
             "diagnostics": sticker_diags[i],
         })
 
-    # Frame-level diagnostics
+    t0 = time.perf_counter()
     diagnostics = calculate_diagnostics(frame)
+    timings["Diagnostics"] = time.perf_counter() - t0
+    
+    # 8. Debugging
+    if DEBUG_MODE and debug_state is not None:
+        debug_state.frame_counter += 1
+        now = time.monotonic()
+        if now - debug_state.last_debug_time > DEBUG_INTERVAL_SECONDS:
+            debug_state.last_debug_time = now
+            _generate_debug_output(
+                frame, fps, debug_state,
+                palette_hex, palette_labs, overlay_coords,
+                raw_patches, center_patches, processed_patches, masks,
+                classifications, reps, sticker_diags,
+                stable_labels, square_stable, diagnostics,
+                temporal_debug, timings
+            )
 
     return {
         "status": "stable" if face_stable else "detecting",
@@ -655,7 +886,7 @@ def _order_points(pts: np.ndarray) -> np.ndarray:
 
 
 def _detect_face_contour(img: np.ndarray) -> Optional[np.ndarray]:
-    """Find the largest quadrilateral contour in the image."""
+    """Find and validate the largest quadrilateral contour."""
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     edged = cv2.Canny(blurred, 50, 200)
@@ -668,10 +899,29 @@ def _detect_face_contour(img: np.ndarray) -> Optional[np.ndarray]:
         return None
 
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
+    img_area = img.shape[0] * img.shape[1]
+
     for cnt in contours:
         peri = cv2.arcLength(cnt, True)
         approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
+        
         if len(approx) == 4:
+            area = cv2.contourArea(approx)
+            
+            # Check 1: Minimum area (must be at least 5% of image)
+            if area < img_area * 0.05:
+                continue
+                
+            # Check 2: Convexity
+            if not cv2.isContourConvex(approx):
+                continue
+                
+            # Check 3: Aspect Ratio (approx bounding box)
+            x, y, w, h = cv2.boundingRect(approx)
+            aspect_ratio = float(w) / max(1, h)
+            if aspect_ratio < 0.5 or aspect_ratio > 2.0:
+                continue
+                
             return approx.reshape(4, 2)
 
     return None
@@ -681,12 +931,7 @@ def _extract_patches_from_image(
     img: np.ndarray,
     config: PipelineConfig = DEFAULT_CONFIG,
 ) -> Tuple[List[np.ndarray], List[List[int]]]:
-    """Detect cube face in an image, perspective-warp, extract 9 patches.
-
-    Returns (patches, overlay_coords) where overlay_coords are synthetic
-    coordinates within the warped image so that process_patches() can be
-    reused.
-    """
+    """Detect cube face, perspective-warp, extract 9 patches."""
     pts = _detect_face_contour(img)
     h, w = img.shape[:2]
     if pts is None:
@@ -721,14 +966,9 @@ def scan_single_face(
     palette_hex: Optional[Dict[str, str]] = None,
     config: PipelineConfig = DEFAULT_CONFIG,
 ) -> Dict:
-    """Scan a single uploaded face image.
-
-    Detect face → Perspective Warp → Generate 9 patches →
-    Preprocess → Classify (reuses the same pipeline as live scanning).
-
-    Returns ``{"stickers": [...], "grid": [...], "diagnostics": {...}, "success": bool}``.
-    """
-    patches, coords = _extract_patches_from_image(img, config)
+    """Scan a single uploaded face image using the shared pipeline logic."""
+    raw_patches, coords = _extract_patches_from_image(img, config)
+    center_patches = [_crop_center(p, config) for p in raw_patches]
 
     if palette_hex:
         palette_labs = convert_palette_to_lab(palette_hex)
@@ -736,11 +976,11 @@ def scan_single_face(
         stickers = []
         grid = [["" for _ in range(3)] for _ in range(3)]
 
-        for i, patch in enumerate(patches):
+        for i, c_patch in enumerate(center_patches):
             r, c = i // 3, i % 3
-            cleaned, mask = preprocess_patch(patch, config)
-            rep = representative_color(cleaned, mask)
-            cls = classify_patch(rep["lab"], palette_labs)
+            bgr_cleaned, mask, _ = preprocess_patch(c_patch, config)
+            rep = representative_color(bgr_cleaned, mask)
+            cls = classify_patch(rep["lab"], palette_labs, config)
 
             face_label = cls["face"]
             grid[r][c] = face_label
@@ -749,13 +989,12 @@ def scan_single_face(
                 "confidence": cls["confidence"],
             })
     else:
-        # No palette — return raw average colours
         stickers = []
         grid = [["" for _ in range(3)] for _ in range(3)]
 
-        for i, patch in enumerate(patches):
+        for i, c_patch in enumerate(center_patches):
             r, c = i // 3, i % 3
-            bgr = np.median(patch.reshape(-1, 3), axis=0).astype(int)
+            bgr = np.median(c_patch.reshape(-1, 3), axis=0).astype(int)
             rgb = bgr[::-1]
             hex_color = "#{:02x}{:02x}{:02x}".format(*rgb)
             grid[r][c] = hex_color
@@ -780,36 +1019,28 @@ async def scan_cube_from_images(
     face_order: Optional[List[str]] = None,
     config: PipelineConfig = DEFAULT_CONFIG,
 ) -> Tuple[str, Dict, Dict, List]:
-    """Full 6-image upload pipeline.
-
-    Reads 6 face images → detects faces → extracts stickers →
-    calibrates centres → classifies → enforces global constraints.
-
-    Returns ``(cube_string, face_grids, confidence_stats, palette)``.
-    """
+    """Full 6-image upload pipeline."""
     if face_order is None:
         face_order = ["U", "R", "F", "D", "L", "B"]
 
-    # Read images
     images: Dict[str, np.ndarray] = {}
     for f in face_order:
         images[f] = await read_image(files[f])
 
-    # Extract patches and calibrate from centres
     face_patches: Dict[str, List[np.ndarray]] = {}
     for f in face_order:
-        patches, _ = _extract_patches_from_image(images[f], config)
-        face_patches[f] = patches
+        raw_patches, _ = _extract_patches_from_image(images[f], config)
+        center_patches = [_crop_center(p, config) for p in raw_patches]
+        face_patches[f] = center_patches
 
-    # Build palette from centre stickers (index 4 = row 1 col 1)
     palette_hex: Dict[str, str] = {}
     palette_display: List[Dict] = []
     centre_labs: Dict[str, np.ndarray] = {}
 
     for f in face_order:
         centre_patch = face_patches[f][4]
-        cleaned, mask = preprocess_patch(centre_patch, config)
-        rep = representative_color(cleaned, mask)
+        bgr_cleaned, mask, _ = preprocess_patch(centre_patch, config)
+        rep = representative_color(bgr_cleaned, mask)
         centre_labs[f] = rep["lab"]
 
         bgr_int = rep["bgr"].astype(int)
@@ -818,7 +1049,6 @@ async def scan_cube_from_images(
         palette_hex[f] = hex_color
         palette_display.append({"face": f, "color": hex_color, "label": f"{f} Face (Calibrated)"})
 
-    # Classify all stickers
     face_grids: Dict[str, List[List[str]]] = {}
     face_confs: Dict[str, List[List[float]]] = {}
 
@@ -833,19 +1063,17 @@ async def scan_cube_from_images(
                 confs[row][col] = 1.0
                 continue
 
-            cleaned, mask = preprocess_patch(patch, config)
-            rep = representative_color(cleaned, mask)
-            cls = classify_patch(rep["lab"], centre_labs)
+            bgr_cleaned, mask, _ = preprocess_patch(patch, config)
+            rep = representative_color(bgr_cleaned, mask)
+            cls = classify_patch(rep["lab"], centre_labs, config)
             grid[row][col] = cls["face"]
             confs[row][col] = cls["confidence"]
 
         face_grids[f] = grid
         face_confs[f] = confs
 
-    # Global constraint enforcement
     face_grids, face_confs = _enforce_global_constraints(face_grids, face_confs)
 
-    # Build Kociemba string
     cube_string = "".join(
         "".join(row) for f in face_order for row in face_grids[f]
     )
@@ -866,10 +1094,7 @@ def _enforce_global_constraints(
     face_grids: Dict[str, List[List[str]]],
     confidences: Dict[str, List[List[float]]],
 ) -> Tuple[Dict[str, List[List[str]]], Dict[str, List[List[float]]]]:
-    """Enforce exactly 9 stickers per face letter.
-
-    Reassigns lowest-confidence surplus stickers to deficit faces.
-    """
+    """Enforce exactly 9 stickers per face letter."""
     classes = ["U", "R", "F", "D", "L", "B"]
     items = []
 

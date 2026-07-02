@@ -30,6 +30,7 @@ from app.cv.pipeline import (
     read_image,
     TemporalSmoother,
     PaletteCache,
+    DebugState,
 )
 from app.cv.llm_provider import get_llm_provider, is_llm_available
 
@@ -221,6 +222,7 @@ async def live_scan_websocket(websocket: WebSocket):
     await websocket.accept()
     smoother = TemporalSmoother()
     palette_cache = PaletteCache()
+    debug_state = DebugState()
     saved_coords = None
 
     try:
@@ -250,17 +252,24 @@ async def live_scan_websocket(websocket: WebSocket):
             if not hex_palette:
                 await websocket.send_json({"error": "No palette provided"})
                 continue
+                
+            debug_info = message.get("debug_info")
+            if debug_info and debug_state is not None:
+                debug_state.frontend_debug_info = debug_info
 
             # Run the entire CV pipeline
             try:
+                fps = message.get("fps", 0)
                 result = process_patches(
                     frame=frame,
                     overlay_coords=saved_coords,
                     palette_hex=hex_palette,
                     smoother=smoother,
                     palette_cache=palette_cache,
+                    fps=fps,
+                    debug_state=debug_state,
                 )
-                result["fps"] = message.get("fps", 0)
+                result["fps"] = fps
                 await websocket.send_json(result)
             except Exception as e:
                 await websocket.send_json({

@@ -17,6 +17,7 @@ export default function WebcamScanner({
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const wsRef = useRef(null);
+  const gridRef = useRef(null);
   
   const [stream, setStream] = useState(null);
   const [hasCameraError, setHasCameraError] = useState(false);
@@ -44,51 +45,74 @@ export default function WebcamScanner({
 
   const lastSentGridSizeRef = useRef(null);
 
-  const calculateCoordinates = (sw, sh, currentGridSize) => {
-      const videoAspect = sw / sh;
-      const containerAspect = 4 / 3;
+  const calculateCoordinates = (sendCanvasWidth, sendCanvasHeight) => {
+      if (!videoRef.current || !gridRef.current) return [];
+
+      const videoRect = videoRef.current.getBoundingClientRect();
+      const gridRect = gridRef.current.getBoundingClientRect();
       
-      let visibleW, visibleH;
-      if (videoAspect > containerAspect) {
-          visibleH = sh;
-          visibleW = sh * containerAspect;
-      } else {
-          visibleW = sw;
-          visibleH = sw / containerAspect;
-      }
+      const vw = videoRef.current.videoWidth;
+      const vh = videoRef.current.videoHeight;
+      if (!vw || !vh) return [];
+
+      // Object-fit: cover scaling
+      const scale = Math.max(videoRect.width / vw, videoRect.height / vh);
       
-      const gw = currentGridSize * visibleW;
-      const gh = gw; 
+      // The rendered video size on screen (overflows videoRect)
+      const renderedW = vw * scale;
+      const renderedH = vh * scale;
       
-      const cx = sw / 2;
-      const cy = sh / 2;
-      const startX = cx - gw / 2;
-      const startY = cy - gh / 2;
+      // Video top-left relative to the video element bounding box (since it's centered)
+      const videoX = (videoRect.width - renderedW) / 2;
+      const videoY = (videoRect.height - renderedH) / 2;
       
-      // Each cell in the 3x3 grid (represents the whole sticker)
-      const sqW = gw / 3;
-      const sqH = gh / 3;
+      // Grid top-left relative to the video element bounding box
+      const gridX = gridRect.left - videoRect.left;
+      const gridY = gridRect.top - videoRect.top;
       
-      // The user requested the sampling square to be 40%-70% of the sticker size.
-      // We use 55% for the central sampling region.
-      const samplingRatio = 0.55;
+      // Grid offset from the true top-left of the rendered video pixels
+      const pixelX = gridX - videoX;
+      const pixelY = gridY - videoY;
+      
+      // Scale back to intrinsic video resolution
+      const intrinsicX = pixelX / scale;
+      const intrinsicY = pixelY / scale;
+      const intrinsicW = gridRect.width / scale;
+      const intrinsicH = gridRect.height / scale;
+
+      // Project into the downscaled canvas sent to the backend
+      const canvasScale = sendCanvasWidth / vw;
+      const finalX = intrinsicX * canvasScale;
+      const finalY = intrinsicY * canvasScale;
+      const finalW = intrinsicW * canvasScale;
+      const finalH = intrinsicH * canvasScale;
+
+      const sqW = finalW / 3;
+      const sqH = finalH / 3;
       
       const coords = [];
       for (let r = 0; r < 3; r++) {
           for (let c = 0; c < 3; c++) {
-              // Calculate margin to center the 55% region inside the sticker cell
-              const marginX = sqW * ((1 - samplingRatio) / 2);
-              const marginY = sqH * ((1 - samplingRatio) / 2);
-              
               coords.push([
-                  Math.round(startX + c * sqW + marginX),
-                  Math.round(startY + r * sqH + marginY),
-                  Math.round(sqW * samplingRatio),
-                  Math.round(sqH * samplingRatio)
+                  Math.round(finalX + c * sqW),
+                  Math.round(finalY + r * sqH),
+                  Math.round(sqW),
+                  Math.round(sqH)
               ]);
           }
       }
-      return coords;
+      return {
+          coords,
+          metrics: {
+              camera_resolution: { w: vw, h: vh },
+              video_element: { w: videoRect.width, h: videoRect.height },
+              rendered_video: { w: renderedW, h: renderedH },
+              grid_element: { w: gridRect.width, h: gridRect.height },
+              canvas_sent: { w: sendCanvasWidth, h: sendCanvasHeight },
+              dom_to_video_scale: scale,
+              canvas_scale: canvasScale
+          }
+      };
   };
 
   // Simulating hardware toggles
@@ -219,7 +243,6 @@ export default function WebcamScanner({
           lastFpsTimeRef.current = now;
         }
 
-        // Downscale to save bandwidth (max 600px width)
         const scale = Math.min(600 / canvas.width, 1);
         const sendCanvas = document.createElement("canvas");
         sendCanvas.width = canvas.width * scale;
@@ -232,16 +255,18 @@ export default function WebcamScanner({
         const dataUrl = sendCanvas.toDataURL("image/jpeg", quality);
         const base64 = dataUrl.split(",")[1];
 
+        // Gather metrics using the new DOM projection
+        const projection = calculateCoordinates(sendCanvas.width, sendCanvas.height);
+        const coords = projection.coords || [];
+        const debug_info = projection.metrics || {};
+
         const payload = {
           frame: base64,
           palette: palette,
-          fps: fps
+          fps: fps,
+          debug_info: debug_info,
+          overlay_coords: coords
         };
-
-        if (lastSentGridSizeRef.current !== gridSize) {
-           payload.overlay_coords = calculateCoordinates(sendCanvas.width, sendCanvas.height, gridSize);
-           lastSentGridSizeRef.current = gridSize;
-        }
 
         wsRef.current.send(JSON.stringify(payload));
       }
@@ -307,7 +332,7 @@ export default function WebcamScanner({
 
       {/* Viewfinder overlay */}
       <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
-        <div className="relative aspect-square transition-all duration-200 ease-out" style={{ width: `${gridSize * 100}%` }}>
+        <div ref={gridRef} className="relative aspect-square transition-all duration-200 ease-out" style={{ width: `${gridSize * 100}%` }}>
           {/* 3x3 Grid Overlay - Only rendering the central sampling regions (55%) */}
           <div className="absolute inset-0 grid grid-cols-3 grid-rows-3">
             {stickers.map((s, i) => (
