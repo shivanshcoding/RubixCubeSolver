@@ -145,6 +145,11 @@ export async function validateCubeString(cubeString) {
   return res.data;
 }
 
+export async function validatePalette(palette) {
+  const res = await api.post("/api/cube/validate-palette", palette);
+  return res.data;
+}
+
 export async function solveCube(cubeString, solver = "kociemba") {
   const res = await api.post("/api/cube/solve", {
     cube_string: cubeString,

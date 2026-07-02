@@ -2,10 +2,11 @@
 CubeVision AI — Cube API Routes
 
 Cube validation, solving, state management, and scanning endpoints.
+All Computer Vision logic is delegated to ``app.cv.pipeline``.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, WebSocket, WebSocketDisconnect
-from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, WebSocket, WebSocketDisconnect, Body
+from typing import Optional, Dict
 import base64
 import numpy as np
 import cv2
@@ -22,15 +23,13 @@ from app.models.cube import (
 from app.services.cube_state_service import CubeStateService
 from app.services.solver_service import SolverService
 from app.cv.pipeline import (
+    validate_palette,
+    process_patches,
+    scan_single_face,
     scan_cube_from_images,
-    preprocess_image,
-    extract_stickers,
-    crop_stickers_from_coords,
-    detect_face_contour,
-    get_dominant_color_lab,
-    classify_color_lab,
+    read_image,
     TemporalSmoother,
-    calculate_diagnostics,
+    PaletteCache,
 )
 from app.cv.llm_provider import get_llm_provider, is_llm_available
 
@@ -62,11 +61,17 @@ async def validate_cube(request: CubeStateRequest):
 
 
 @router.post("/validate-string")
-async def validate_cube_string(request: SolveRequest):
+async def validate_cube_string_endpoint(request: SolveRequest):
     """Validate a 54-char cube string."""
     solver_service = SolverService()
     result = solver_service.validate(request.cube_string)
     return result
+
+
+@router.post("/validate-palette")
+async def validate_palette_endpoint(palette: Dict[str, str] = Body(...)):
+    """Validate that 6 selected colours have sufficient perceptual separation."""
+    return validate_palette(palette)
 
 
 # ─── Solving ──────────────────────────────────────────────────────
@@ -179,77 +184,43 @@ async def scan_cube(
 
 
 @router.post("/scan/single")
-async def scan_single_face(
+async def scan_single_face_endpoint(
     image: UploadFile = File(...),
-    palette: Optional[str] = None # JSON string of {"U": "#ffffff", ...}
+    palette: Optional[str] = None,
 ):
-    """Scan a single cube face image and return the detected colors."""
+    """Scan a single cube face image and return the detected colours."""
     try:
-        from app.cv.pipeline import read_image
         img = await read_image(image)
-        processed = preprocess_image(img)
-        patches, pts = extract_stickers(processed)
-        
-        center_labs = None
+
+        palette_hex = None
         if palette:
             try:
-                hex_palette = json.loads(palette)
-                center_labs = {}
-                for face, hex_code in hex_palette.items():
-                    if hex_code.startswith("#"):
-                        h = hex_code.lstrip("#")
-                        rgb = tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
-                        bgr = np.array([[rgb[::-1]]], dtype=np.uint8)
-                        lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)[0][0]
-                        center_labs[face] = lab
+                palette_hex = json.loads(palette)
             except Exception:
                 pass
-                
-        grid = [["" for _ in range(3)] for _ in range(3)]
-        confs = [[0.0 for _ in range(3)] for _ in range(3)]
-        flat_stickers = []
 
-        if center_labs:
-            for i, patch in enumerate(patches):
-                r, c = i // 3, i % 3
-                lab = get_dominant_color_lab(patch)
-                face, conf = classify_color_lab(lab, center_labs)
-                grid[r][c] = face
-                confs[r][c] = round(conf, 3)
-                flat_stickers.append({"color": json.loads(palette).get(face, "unknown"), "confidence": confs[r][c]})
-        else:
-            for i, patch in enumerate(patches):
-                r, c = i // 3, i % 3
-                bgr = np.mean(patch.reshape(-1, 3), axis=0)
-                rgb = bgr[::-1].astype(int)
-                hex_color = "#{:02x}{:02x}{:02x}".format(*rgb)
-                grid[r][c] = hex_color
-                confs[r][c] = 0.5
-                flat_stickers.append({"color": hex_color, "confidence": 0.5})
-
-        diagnostics = calculate_diagnostics(img, pts)
-        
-        return {
-            "stickers": flat_stickers,
-            "grid": grid,
-            "diagnostics": diagnostics,
-            "success": True
-        }
-    except Exception as e:
-        raise HTTPException(status_code=422, detail={"error": "Cube face not found. Lighting might be too dark, there is too much glare, or the cube is partially outside the image. Please try again."})
+        result = scan_single_face(img, palette_hex)
+        return result
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": "Cube face not found. Lighting might be too dark, "
+                    "there is too much glare, or the cube is partially outside "
+                    "the image. Please try again."},
+        )
 
 
 # ─── WebSocket Live Scanning ─────────────────────────────────────
 
 @router.websocket("/scan/live")
 async def live_scan_websocket(websocket: WebSocket):
-    """
-    WebSocket endpoint for live webcam scanning.
-    Receives base64-encoded frames, returns per-sticker detection results.
+    """WebSocket endpoint for live webcam scanning.
+
+    Decodes frames and delegates all CV to ``process_patches()``.
     """
     await websocket.accept()
-    smoother = TemporalSmoother(required_stable_frames=5, min_confidence=0.75)
-    center_labs = None
+    smoother = TemporalSmoother()
+    palette_cache = PaletteCache()
     saved_coords = None
 
     try:
@@ -258,7 +229,6 @@ async def live_scan_websocket(websocket: WebSocket):
             message = json.loads(data)
 
             frame_b64 = message.get("frame", "")
-            face_index = message.get("face_index", 0)
 
             # Decode base64 frame
             img_data = base64.b64decode(frame_b64)
@@ -272,73 +242,35 @@ async def live_scan_websocket(websocket: WebSocket):
             if "overlay_coords" in message:
                 saved_coords = message["overlay_coords"]
 
-            # Preprocess
-            processed = preprocess_image(frame)
-
-            # Lightweight contour check for alignment diagnostics
-            pts = detect_face_contour(processed)
-            diagnostics = calculate_diagnostics(frame, pts)
-
             if not saved_coords:
                 await websocket.send_json({"error": "Waiting for overlay coordinates"})
                 continue
 
-            # Extract stickers using exact coordinates
+            hex_palette = message.get("palette", {})
+            if not hex_palette:
+                await websocket.send_json({"error": "No palette provided"})
+                continue
+
+            # Run the entire CV pipeline
             try:
-                patches = crop_stickers_from_coords(processed, saved_coords)
-            except Exception:
+                result = process_patches(
+                    frame=frame,
+                    overlay_coords=saved_coords,
+                    palette_hex=hex_palette,
+                    smoother=smoother,
+                    palette_cache=palette_cache,
+                )
+                result["fps"] = message.get("fps", 0)
+                await websocket.send_json(result)
+            except Exception as e:
                 await websocket.send_json({
                     "status": "error",
                     "stickers": [{"color": "unknown", "confidence": 0.0, "stable": False} for _ in range(9)],
-                    "diagnostics": diagnostics,
+                    "diagnostics": {"lighting": 0, "sharpness": 0, "angle": 0, "glare": 0},
                     "fps": 0,
                     "face_stable": False,
-                    "square_stable": [False] * 9
+                    "square_stable": [False] * 9,
                 })
-                continue
-
-            # Convert hex palette to LAB on the fly if provided
-            hex_palette = message.get("palette", {})
-            if hex_palette:
-                center_labs_dynamic = {}
-                for face, hex_code in hex_palette.items():
-                    if hex_code.startswith("#"):
-                        h = hex_code.lstrip("#")
-                        rgb = tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
-                        bgr = np.array([[rgb[::-1]]], dtype=np.uint8)
-                        lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)[0][0]
-                        center_labs_dynamic[face] = lab
-                center_labs = center_labs_dynamic
-
-            flat_stickers = []
-
-            if center_labs:
-                for patch in patches:
-                    lab = get_dominant_color_lab(patch)
-                    face, conf = classify_color_lab(lab, center_labs)
-                    flat_stickers.append({"color": hex_palette.get(face, "unknown"), "confidence": round(conf, 3)})
-            else:
-                for patch in patches:
-                    bgr = np.mean(patch.reshape(-1, 3), axis=0)
-                    rgb = bgr[::-1].astype(int)
-                    hex_color = "#{:02x}{:02x}{:02x}".format(*rgb)
-                    flat_stickers.append({"color": hex_color, "confidence": 0.5})
-
-            # Temporal smoothing (per sticker)
-            face_stable, square_stable = smoother.add_frame(flat_stickers)
-            
-            # Attach stable flags to stickers for the frontend
-            for i in range(9):
-                flat_stickers[i]["stable"] = square_stable[i]
-
-            await websocket.send_json({
-                "status": "stable" if face_stable else "detecting",
-                "stickers": flat_stickers,
-                "diagnostics": diagnostics,
-                "fps": message.get("fps", 0),
-                "face_stable": face_stable,
-                "square_stable": square_stable
-            })
 
     except WebSocketDisconnect:
         pass

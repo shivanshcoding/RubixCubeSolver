@@ -13,7 +13,8 @@ import {
   RiEditLine,
   RiUploadCloud2Line,
   RiPaletteLine,
-  RiInformationLine
+  RiInformationLine,
+  RiEraserLine
 } from "react-icons/ri";
 import { useCubeStore } from "@/store/cubeStore";
 import { useUIStore } from "@/store/uiStore";
@@ -322,7 +323,7 @@ export default function ScannerPage() {
             </div>
 
             {/* Top Zone: 2-Column Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-[45%_1fr] gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-[42%_1fr] gap-6">
               
               {/* Col 1: Webcam/Review/Fallback */}
               <div className="h-full min-h-[300px]">
@@ -370,7 +371,7 @@ export default function ScannerPage() {
                      <div className="text-sm font-semibold text-zinc-200">2D Live Map</div>
                      
                      <div className="flex items-center gap-3">
-                       <div className="text-[10px] text-zinc-500 text-right leading-tight max-w-[160px] hidden xl:block">
+                       <div className="text-[10px] text-zinc-500 text-left leading-tight max-w-[260px] hidden xl:block">
                          Paint missing stickers or click a center to scan.
                        </div>
                        <div className="flex gap-1 p-1 bg-black/30 rounded-lg border border-white/5">
@@ -386,13 +387,24 @@ export default function ScannerPage() {
                              style={{ backgroundColor: item.color }}
                            />
                          ))}
+                         <button
+                           onClick={() => setActiveColor("unknown")}
+                           className={`w-5 h-5 rounded-md border transition-all flex items-center justify-center ${
+                             activeColor === "unknown" 
+                               ? "border-white/80 shadow-[0_0_8px_rgba(255,255,255,0.2)] scale-110 z-10 bg-zinc-700" 
+                               : "border-white/10 opacity-60 hover:opacity-100 bg-zinc-800"
+                           }`}
+                           title="Eraser"
+                         >
+                           <RiEraserLine className="w-3 h-3 text-white" />
+                         </button>
                        </div>
                      </div>
                   </div>
                   
                   {/* 2D Net */}
-                  <div className="flex-1 flex items-center justify-center min-h-[300px]">
-                    <div className="w-full max-w-[420px] mx-auto">
+                  <div className="flex-1 flex items-center justify-center min-h-[350px]">
+                    <div className="w-full max-w-[470px] mx-auto">
                       <CubeNet 
                         onCenterClick={(faceKey) => {
                            setActiveScanFace(faceKey);

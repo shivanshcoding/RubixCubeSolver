@@ -2,99 +2,51 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { RiPaletteLine, RiArrowRightLine, RiInformationLine } from "react-icons/ri";
+import { RiPaletteLine, RiArrowRightLine, RiLoader4Line } from "react-icons/ri";
+import { toast } from "react-hot-toast";
+import { validatePalette } from "@/services/api";
 
 const FACE_ORDER = ["U", "R", "F", "D", "L", "B"];
 const FACE_LABELS = { U: "Up", D: "Down", F: "Front", B: "Back", R: "Right", L: "Left" };
 
-// Basic HSV distance (not true Delta E, but sufficient for this context)
-function hexToHsv(hex) {
-  let r = 0, g = 0, b = 0;
-  if (hex.length === 4) {
-    r = parseInt(hex[1] + hex[1], 16);
-    g = parseInt(hex[2] + hex[2], 16);
-    b = parseInt(hex[3] + hex[3], 16);
-  } else if (hex.length === 7) {
-    r = parseInt(hex.substring(1, 3), 16);
-    g = parseInt(hex.substring(3, 5), 16);
-    b = parseInt(hex.substring(5, 7), 16);
-  }
-  r /= 255; g /= 255; b /= 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  let h, s, v = max;
-  const d = max - min;
-  s = max === 0 ? 0 : d / max;
-  if (max === min) {
-    h = 0; // achromatic
-  } else {
-    switch (max) {
-      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-      case g: h = (b - r) / d + 2; break;
-      case b: h = (r - g) / d + 4; break;
-    }
-    h /= 6;
-  }
-  return [h * 360, s * 100, v * 100];
-}
-
-function getColorDistance(hex1, hex2) {
-  const [h1, s1, v1] = hexToHsv(hex1);
-  const [h2, s2, v2] = hexToHsv(hex2);
-  
-  // Cylinder distance approximation
-  const dh = Math.min(Math.abs(h1 - h2), 360 - Math.abs(h1 - h2)) / 180.0;
-  const ds = (s1 - s2) / 100.0;
-  const dv = (v1 - v2) / 100.0;
-  
-  return Math.sqrt(dh*dh + ds*ds + dv*dv);
-}
-
 export default function ColorConfiguration({ tempColors, setTempColors, onConfirm }) {
   const [error, setError] = useState("");
-  const [similarityStatus, setSimilarityStatus] = useState("good"); // good, acceptable, poor
-
-  const checkSimilarity = (colors) => {
-    let minDistance = 999;
-    let worstPair = null;
-
-    const faces = Object.keys(colors);
-    for (let i = 0; i < faces.length; i++) {
-      for (let j = i + 1; j < faces.length; j++) {
-        const dist = getColorDistance(colors[faces[i]], colors[faces[j]]);
-        if (dist < minDistance) {
-          minDistance = dist;
-          worstPair = { f1: faces[i], f2: faces[j], dist };
-        }
-      }
-    }
-
-    if (minDistance < 0.1) {
-      setSimilarityStatus("poor");
-      return `The selected ${FACE_LABELS[worstPair.f1]} and ${FACE_LABELS[worstPair.f2]} colors are too similar for reliable computer vision detection. Please choose more distinct shades.`;
-    } else if (minDistance < 0.3) {
-      setSimilarityStatus("acceptable");
-      setError("");
-      return null;
-    } else {
-      setSimilarityStatus("good");
-      setError("");
-      return null;
-    }
-  };
+  const [similarityStatus, setSimilarityStatus] = useState("ready"); // ready, good, acceptable, poor
+  const [isValidating, setIsValidating] = useState(false);
 
   const handleColorChange = (face, color) => {
     const newColors = { ...tempColors, [face]: color };
     setTempColors(newColors);
-    checkSimilarity(newColors);
+    if (error) setError("");
+    setSimilarityStatus("ready");
   };
 
-  const handleConfirm = () => {
-    const simError = checkSimilarity(tempColors);
-    if (simError) {
-      setError(simError);
-      return;
+  const handleConfirm = async () => {
+    setIsValidating(true);
+    try {
+      const res = await validatePalette(tempColors);
+      
+      if (res.status === "POOR") {
+        setSimilarityStatus("poor");
+        setError(res.message || "Colors are too similar.");
+      } else if (res.status === "ACCEPTABLE") {
+        setSimilarityStatus("acceptable");
+        setError("");
+        toast(res.message, { icon: "⚠️" });
+        onConfirm();
+      } else {
+        setSimilarityStatus("good");
+        setError("");
+        onConfirm();
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to validate colors with the server.");
+      setSimilarityStatus("poor");
+      setError("Network error. Please try again.");
+    } finally {
+      setIsValidating(false);
     }
-    onConfirm();
   };
 
   return (
@@ -106,12 +58,15 @@ export default function ColorConfiguration({ tempColors, setTempColors, onConfir
         </div>
         <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-white/5 border border-white/10">
           <div className={`w-2 h-2 rounded-full ${
+            similarityStatus === "ready" ? "bg-zinc-500 shadow-none" :
             similarityStatus === "good" ? "bg-green-500 shadow-[0_0_8px_#22c55e]" : 
             similarityStatus === "acceptable" ? "bg-yellow-500 shadow-[0_0_8px_#eab308]" : 
             "bg-red-500 shadow-[0_0_8px_#ef4444]"
           }`} />
           <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">
-            {similarityStatus === "good" ? "Colors Good" : similarityStatus === "acceptable" ? "Acceptable" : "Too Similar"}
+            {similarityStatus === "ready" ? "Pending Check" : 
+             similarityStatus === "good" ? "Colors Good" : 
+             similarityStatus === "acceptable" ? "Acceptable" : "Too Similar"}
           </span>
         </div>
       </div>
@@ -167,12 +122,22 @@ export default function ColorConfiguration({ tempColors, setTempColors, onConfir
 
       <motion.button
         onClick={handleConfirm}
-        className="btn-primary mt-6 flex items-center gap-2 relative z-10"
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
+        disabled={isValidating}
+        className="btn-primary mt-6 flex items-center gap-2 relative z-10 disabled:opacity-75"
+        whileHover={isValidating ? {} : { scale: 1.02 }}
+        whileTap={isValidating ? {} : { scale: 0.98 }}
       >
-        Continue
-        <RiArrowRightLine className="w-4 h-4" />
+        {isValidating ? (
+          <>
+            <RiLoader4Line className="w-4 h-4 animate-spin" />
+            Validating...
+          </>
+        ) : (
+          <>
+            Continue
+            <RiArrowRightLine className="w-4 h-4" />
+          </>
+        )}
       </motion.button>
     </div>
   );

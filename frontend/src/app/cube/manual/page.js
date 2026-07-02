@@ -15,6 +15,7 @@ import {
   RiGridLine,
   RiMagicLine,
   RiQuestionLine,
+  RiEraserLine,
 } from "react-icons/ri";
 import CubeNet from "@/components/cube/CubeNet";
 import SolvingOverlay from "@/components/cube/SolvingOverlay";
@@ -356,6 +357,17 @@ export default function ManualEntryPage() {
                       <span>{item.label}</span>
                     </motion.button>
                   ))}
+                  <motion.button
+                    onClick={() => setActiveColor("unknown")}
+                    className={`manual-palette-btn ${activeColor === "unknown" ? "active" : ""}`}
+                    whileHover={{ scale: 1.04 }}
+                    whileTap={{ scale: 0.96 }}
+                  >
+                    <div className="w-5 h-5 rounded-md border border-white/20 shadow-sm flex items-center justify-center bg-zinc-800">
+                      <RiEraserLine className="w-3 h-3 text-zinc-300" />
+                    </div>
+                    <span>Eraser</span>
+                  </motion.button>
                 </div>
               </div>
 
