@@ -28,11 +28,68 @@ export default function WebcamScanner({
   const frameCountRef = useRef(0);
   const lastFpsTimeRef = useRef(performance.now());
   
-  const [stickers, setStickers] = useState(Array(9).fill({ color: "unknown", confidence: 0 }));
+  const [stickers, setStickers] = useState(Array(9).fill({ color: "unknown", confidence: 0, stable: false }));
   const [isStable, setIsStable] = useState(false);
-  
-  const [countdown, setCountdown] = useState(null); // null, 3, 2, 1
-  const countdownRef = useRef(null);
+  const latestStickersRef = useRef(stickers);
+
+  useEffect(() => {
+    latestStickersRef.current = stickers;
+  }, [stickers]);
+
+  useEffect(() => {
+    if (isStable) {
+       onCapture(latestStickersRef.current);
+    }
+  }, [isStable, onCapture]);
+
+  const lastSentGridSizeRef = useRef(null);
+
+  const calculateCoordinates = (sw, sh, currentGridSize) => {
+      const videoAspect = sw / sh;
+      const containerAspect = 4 / 3;
+      
+      let visibleW, visibleH;
+      if (videoAspect > containerAspect) {
+          visibleH = sh;
+          visibleW = sh * containerAspect;
+      } else {
+          visibleW = sw;
+          visibleH = sw / containerAspect;
+      }
+      
+      const gw = currentGridSize * visibleW;
+      const gh = gw; 
+      
+      const cx = sw / 2;
+      const cy = sh / 2;
+      const startX = cx - gw / 2;
+      const startY = cy - gh / 2;
+      
+      // Each cell in the 3x3 grid (represents the whole sticker)
+      const sqW = gw / 3;
+      const sqH = gh / 3;
+      
+      // The user requested the sampling square to be 40%-70% of the sticker size.
+      // We use 55% for the central sampling region.
+      const samplingRatio = 0.55;
+      
+      const coords = [];
+      for (let r = 0; r < 3; r++) {
+          for (let c = 0; c < 3; c++) {
+              // Calculate margin to center the 55% region inside the sticker cell
+              const marginX = sqW * ((1 - samplingRatio) / 2);
+              const marginY = sqH * ((1 - samplingRatio) / 2);
+              
+              coords.push([
+                  Math.round(startX + c * sqW + marginX),
+                  Math.round(startY + r * sqH + marginY),
+                  Math.round(sqW * samplingRatio),
+                  Math.round(sqH * samplingRatio)
+              ]);
+          }
+      }
+      return coords;
+  };
 
   // Simulating hardware toggles
   const [flashOn, setFlashOn] = useState(false);
@@ -94,6 +151,7 @@ export default function WebcamScanner({
 
     ws.onopen = () => {
       setWsStatus("connected");
+      lastSentGridSizeRef.current = null;
       onDiagnosticsUpdateRef.current?.(null, false, "connected", "");
     };
     
@@ -118,10 +176,10 @@ export default function WebcamScanner({
         }
         
         if (data.stickers) setStickers(data.stickers);
-        if (data.stable !== undefined) setIsStable(data.stable);
+        if (data.face_stable !== undefined) setIsStable(data.face_stable);
         
         // Pass diagnostics up to parent
-        onDiagnosticsUpdateRef.current?.(data.diagnostics || null, data.stable || false, "connected", "");
+        onDiagnosticsUpdateRef.current?.(data.diagnostics || null, data.face_stable || false, "connected", "");
       } catch (e) {
         console.error("Invalid WS message", e);
       }
@@ -174,15 +232,18 @@ export default function WebcamScanner({
         const dataUrl = sendCanvas.toDataURL("image/jpeg", quality);
         const base64 = dataUrl.split(",")[1];
 
-        // Only send if we're not currently locked in countdown
-        if (countdown === null) {
-          wsRef.current.send(JSON.stringify({
-            frame: base64,
-            use_calibration: true,
-            palette: palette,
-            fps: fps
-          }));
+        const payload = {
+          frame: base64,
+          palette: palette,
+          fps: fps
+        };
+
+        if (lastSentGridSizeRef.current !== gridSize) {
+           payload.overlay_coords = calculateCoordinates(sendCanvas.width, sendCanvas.height, gridSize);
+           lastSentGridSizeRef.current = gridSize;
         }
+
+        wsRef.current.send(JSON.stringify(payload));
       }
       
       // Throttle framerate depending on sensitivity
@@ -194,35 +255,7 @@ export default function WebcamScanner({
     
     animationId = requestAnimationFrame(processFrame);
     return () => cancelAnimationFrame(animationId);
-  }, [palette, sensitivity, fps, countdown, isCameraActive]);
-
-  // Handle countdown
-  useEffect(() => {
-    if (isStable && countdown === null) {
-      setCountdown(3);
-    } else if (!isStable && countdown !== null) {
-      setCountdown(null);
-      if (countdownRef.current) clearInterval(countdownRef.current);
-    }
-  }, [isStable, countdown]);
-
-  useEffect(() => {
-    if (countdown !== null) {
-      countdownRef.current = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(countdownRef.current);
-            onCapture(stickers);
-            return null;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => {
-      if (countdownRef.current) clearInterval(countdownRef.current);
-    };
-  }, [countdown, stickers, onCapture]);
+  }, [palette, sensitivity, fps, isCameraActive, gridSize]);
 
   if (hasCameraError) {
     return (
@@ -275,36 +308,13 @@ export default function WebcamScanner({
       {/* Viewfinder overlay */}
       <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
         <div className="relative aspect-square transition-all duration-200 ease-out" style={{ width: `${gridSize * 100}%` }}>
-          {/* Guide corners */}
-          <div className={`absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 ${isStable ? 'border-green-400' : 'border-white/50'} transition-colors`} />
-          <div className={`absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 ${isStable ? 'border-green-400' : 'border-white/50'} transition-colors`} />
-          <div className={`absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 ${isStable ? 'border-green-400' : 'border-white/50'} transition-colors`} />
-          <div className={`absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 ${isStable ? 'border-green-400' : 'border-white/50'} transition-colors`} />
-          
-          {/* 3x3 Grid Overlay */}
-          <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 p-1 gap-0.5">
+          {/* 3x3 Grid Overlay - Only rendering the central sampling regions (55%) */}
+          <div className="absolute inset-0 grid grid-cols-3 grid-rows-3">
             {stickers.map((s, i) => (
-              <div key={i} className="border border-white/20 flex items-center justify-center relative overflow-hidden">
-                 {/* Sticker color preview fill */}
-                 {s.color !== "unknown" && (
-                   <div 
-                      className="absolute inset-0 opacity-40 transition-colors duration-200"
-                      style={{ backgroundColor: s.color }}
-                   />
-                 )}
-                 {/* Confidence indicator */}
-                 {s.confidence > 0 && (
-                   <div className="absolute bottom-1 right-1 text-[8px] font-mono text-white/80 bg-black/50 px-1 rounded">
-                     {Math.round(s.confidence * 100)}%
-                   </div>
-                 )}
+              <div key={i} className="flex items-center justify-center">
+                 <div className={`w-[55%] h-[55%] border-2 transition-colors duration-200 ${s.stable ? "border-green-400" : "border-red-500"}`} />
               </div>
             ))}
-          </div>
-          
-          {/* Center target indicator */}
-          <div className="absolute inset-0 flex items-center justify-center">
-             <div className="w-1.5 h-1.5 rounded-full bg-white/40 backdrop-blur-sm" />
           </div>
         </div>
       </div>
@@ -345,24 +355,23 @@ export default function WebcamScanner({
         </div>
       </div>
 
-      {/* Countdown Overlay */}
+      {/* Auto Capture Status Overlay */}
       <AnimatePresence>
-        {countdown !== null && (
+        {isStable && (
           <motion.div 
             initial={{ scale: 0.5, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 1.5, opacity: 0 }}
-            className="absolute inset-0 z-30 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+            className="absolute inset-0 z-30 flex items-center justify-center bg-green-500/20 backdrop-blur-sm"
           >
             <motion.div 
-              key={countdown}
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 1.2, opacity: 0 }}
-              className="text-8xl font-bold text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.5)]"
+              className="text-4xl font-bold text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.5)] bg-black/40 px-6 py-3 rounded-2xl border border-white/20"
               style={{ fontFamily: "var(--font-display)" }}
             >
-              {countdown}
+              Captured!
             </motion.div>
           </motion.div>
         )}

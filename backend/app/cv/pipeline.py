@@ -179,6 +179,29 @@ def extract_stickers(img: np.ndarray) -> Tuple[List[np.ndarray], Optional[np.nda
 
     return patches, pts
 
+def crop_stickers_from_coords(img: np.ndarray, coords: List[List[int]]) -> List[np.ndarray]:
+    """
+    Crop 9 regions directly from image based on coordinates [x, y, w, h].
+    """
+    if len(coords) != 9:
+        raise ValueError("Expected exactly 9 coordinate regions.")
+    
+    patches = []
+    h_img, w_img = img.shape[:2]
+    
+    for (x, y, w, h) in coords:
+        x1 = max(0, int(x))
+        y1 = max(0, int(y))
+        x2 = min(w_img, int(x + w))
+        y2 = min(h_img, int(y + h))
+        
+        patch = img[y1:y2, x1:x2]
+        if patch.size == 0:
+            patch = np.zeros((10, 10, 3), dtype=np.uint8)
+        patches.append(patch)
+        
+    return patches
+
 
 # ─── Color Classification ────────────────────────────────────────
 
@@ -321,42 +344,46 @@ def enforce_global_constraints(
 
 class TemporalSmoother:
     """
-    Smooths color detection over multiple frames.
-    Only accepts a face when colors are stable for N consecutive frames.
+    Smooths color detection over multiple frames on a per-sticker basis.
+    Accepts a sticker when its color is stable for N consecutive frames with >= 75% confidence.
     """
 
-    def __init__(self, required_stable_frames: int = 5):
+    def __init__(self, required_stable_frames: int = 5, min_confidence: float = 0.75):
         self.required_stable_frames = required_stable_frames
-        self.history: List[List[List[str]]] = []
+        self.min_confidence = min_confidence
+        self.history: List[List[Dict]] = []
 
-    def add_frame(self, grid: List[List[str]]) -> bool:
+    def add_frame(self, flat_stickers: List[Dict]) -> Tuple[bool, List[bool]]:
         """
-        Add a frame detection result.
-        Returns True if the detection is stable.
+        Add a frame detection result (list of 9 {"color": str, "confidence": float}).
+        Returns (face_stable, [square_stable_1, ..., square_stable_9])
         """
-        self.history.append(grid)
+        if len(flat_stickers) != 9:
+            return False, [False] * 9
+
+        self.history.append(flat_stickers)
+
+        if len(self.history) > self.required_stable_frames:
+            self.history.pop(0)
 
         if len(self.history) < self.required_stable_frames:
-            return False
+            return False, [False] * 9
 
-        # Keep only the last N frames
-        self.history = self.history[-self.required_stable_frames:]
+        stable_flags = []
+        for i in range(9):
+            ref_color = self.history[0][i].get("color", "unknown")
+            if ref_color == "unknown":
+                stable_flags.append(False)
+                continue
+                
+            is_stable = True
+            for frame in self.history:
+                if frame[i].get("color") != ref_color or frame[i].get("confidence", 0) < self.min_confidence:
+                    is_stable = False
+                    break
+            stable_flags.append(is_stable)
 
-        # Check if all frames agree
-        reference = self.history[0]
-        for frame in self.history[1:]:
-            for r in range(3):
-                for c in range(3):
-                    if frame[r][c] != reference[r][c]:
-                        return False
-
-        return True
-
-    def get_stable_result(self) -> Optional[List[List[str]]]:
-        """Get the stable detection result if available."""
-        if len(self.history) >= self.required_stable_frames:
-            return self.history[-1]
-        return None
+        return all(stable_flags), stable_flags
 
     def reset(self):
         """Reset smoothing history."""

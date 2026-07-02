@@ -25,6 +25,8 @@ from app.cv.pipeline import (
     scan_cube_from_images,
     preprocess_image,
     extract_stickers,
+    crop_stickers_from_coords,
+    detect_face_contour,
     get_dominant_color_lab,
     classify_color_lab,
     TemporalSmoother,
@@ -234,7 +236,7 @@ async def scan_single_face(
             "success": True
         }
     except Exception as e:
-        raise HTTPException(status_code=422, detail={"error": str(e)})
+        raise HTTPException(status_code=422, detail={"error": "Cube face not found. Lighting might be too dark, there is too much glare, or the cube is partially outside the image. Please try again."})
 
 
 # ─── WebSocket Live Scanning ─────────────────────────────────────
@@ -246,8 +248,9 @@ async def live_scan_websocket(websocket: WebSocket):
     Receives base64-encoded frames, returns per-sticker detection results.
     """
     await websocket.accept()
-    smoother = TemporalSmoother(required_stable_frames=5)
+    smoother = TemporalSmoother(required_stable_frames=5, min_confidence=0.75)
     center_labs = None
+    saved_coords = None
 
     try:
         while True:
@@ -266,29 +269,37 @@ async def live_scan_websocket(websocket: WebSocket):
                 await websocket.send_json({"error": "Invalid frame"})
                 continue
 
+            if "overlay_coords" in message:
+                saved_coords = message["overlay_coords"]
+
             # Preprocess
             processed = preprocess_image(frame)
 
-            # Extract stickers
+            # Lightweight contour check for alignment diagnostics
+            pts = detect_face_contour(processed)
+            diagnostics = calculate_diagnostics(frame, pts)
+
+            if not saved_coords:
+                await websocket.send_json({"error": "Waiting for overlay coordinates"})
+                continue
+
+            # Extract stickers using exact coordinates
             try:
-                patches, pts = extract_stickers(processed)
+                patches = crop_stickers_from_coords(processed, saved_coords)
             except Exception:
                 await websocket.send_json({
                     "status": "error",
-                    "stickers": [{"color": "unknown", "confidence": 0.0} for _ in range(9)],
-                    "diagnostics": {"lighting": 0, "sharpness": 0, "angle": 0, "glare": 0},
+                    "stickers": [{"color": "unknown", "confidence": 0.0, "stable": False} for _ in range(9)],
+                    "diagnostics": diagnostics,
                     "fps": 0,
-                    "stable": False,
+                    "face_stable": False,
+                    "square_stable": [False] * 9
                 })
                 continue
 
-            diagnostics = calculate_diagnostics(frame, pts)
-
-            # If we have center calibration data, classify
-            # But wait, the frontend sends hex colors. We need to convert hex to LAB on the fly if provided.
+            # Convert hex palette to LAB on the fly if provided
             hex_palette = message.get("palette", {})
             if hex_palette:
-                # Convert hex palette to LAB
                 center_labs_dynamic = {}
                 for face, hex_code in hex_palette.items():
                     if hex_code.startswith("#"):
@@ -299,48 +310,34 @@ async def live_scan_websocket(websocket: WebSocket):
                         center_labs_dynamic[face] = lab
                 center_labs = center_labs_dynamic
 
-            grid = [["" for _ in range(3)] for _ in range(3)]
-            confs = [[0.0 for _ in range(3)] for _ in range(3)]
             flat_stickers = []
 
             if center_labs:
-                for i, patch in enumerate(patches):
-                    r, c = i // 3, i % 3
+                for patch in patches:
                     lab = get_dominant_color_lab(patch)
                     face, conf = classify_color_lab(lab, center_labs)
-                    grid[r][c] = face
-                    confs[r][c] = round(conf, 3)
-                    flat_stickers.append({"color": hex_palette.get(face, "unknown"), "confidence": confs[r][c]})
+                    flat_stickers.append({"color": hex_palette.get(face, "unknown"), "confidence": round(conf, 3)})
             else:
-                for i, patch in enumerate(patches):
-                    r, c = i // 3, i % 3
+                for patch in patches:
                     bgr = np.mean(patch.reshape(-1, 3), axis=0)
                     rgb = bgr[::-1].astype(int)
                     hex_color = "#{:02x}{:02x}{:02x}".format(*rgb)
-                    grid[r][c] = hex_color
-                    confs[r][c] = 0.5  # No calibration = uncertain
                     flat_stickers.append({"color": hex_color, "confidence": 0.5})
 
-            # Check confidence threshold
-            all_confident = all(
-                confs[r][c] >= 0.6
-                for r in range(3)
-                for c in range(3)
-            )
+            # Temporal smoothing (per sticker)
+            face_stable, square_stable = smoother.add_frame(flat_stickers)
+            
+            # Attach stable flags to stickers for the frontend
+            for i in range(9):
+                flat_stickers[i]["stable"] = square_stable[i]
 
-            # Temporal smoothing
-            is_stable = smoother.add_frame(grid)
-
-            # Calculate FPS from time delta if needed (or let frontend calculate it)
-            # Frontend handles its own FPS, but we can reflect a generic number or a tracked one
-            # For now, let's just send back what frontend expects
             await websocket.send_json({
-                "status": "stable" if is_stable and all_confident else "detecting",
+                "status": "stable" if face_stable else "detecting",
                 "stickers": flat_stickers,
                 "diagnostics": diagnostics,
-                "fps": message.get("fps", 0), # Pass back frontend FPS or calculate it
-                "stable": is_stable and all_confident,
-                "grid": grid # Useful for debugging or frontend parsing
+                "fps": message.get("fps", 0),
+                "face_stable": face_stable,
+                "square_stable": square_stable
             })
 
     except WebSocketDisconnect:

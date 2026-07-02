@@ -59,8 +59,8 @@ export default function ScannerPage() {
   const [tempColors, setTempColors] = useState({ ...colorMapping });
 
   // State Machine
-  // Modes: "color_config", "scanning", "review", "completed", "upload_fallback"
-  const [mode, setMode] = useState("color_config"); 
+  // Modes: IDLE, CALIBRATING, SCANNING, UPLOAD, REVIEW, COMPLETED
+  const [mode, setMode] = useState("CALIBRATING"); 
   const [activeScanFace, setActiveScanFace] = useState("U");
   const [reviewStickers, setReviewStickers] = useState(null);
 
@@ -79,16 +79,16 @@ export default function ScannerPage() {
     setIsMounted(true);
     if (solution) {
       reset();
-      setMode("color_config");
+      setMode("CALIBRATING");
     } else if (isColorMappingSet) {
-      setMode("scanning");
+      setMode("SCANNING");
     }
   }, [isColorMappingSet, solution, reset]);
 
   // Handle particle background visibility
   const setShowParticles = useUIStore((state) => state.setShowParticles);
   useEffect(() => {
-    if (mode === "scanning" || mode === "review" || mode === "upload_fallback") {
+    if (mode === "SCANNING" || mode === "REVIEW" || mode === "UPLOAD") {
       setShowParticles(false);
     } else {
       setShowParticles(true);
@@ -105,13 +105,13 @@ export default function ScannerPage() {
 
   const handleColorConfirm = () => {
     setColorMapping(tempColors);
-    setMode("scanning");
+    setMode("SCANNING");
     toast.success("Calibration complete!");
   };
 
   const handleCapture = (stickers) => {
     setReviewStickers(stickers);
-    setMode("review");
+    setMode("REVIEW");
   };
 
   const handleAcceptFace = (stickers) => {
@@ -125,9 +125,9 @@ export default function ScannerPage() {
     const currIdx = FACE_ORDER.indexOf(currentFace);
     if (currIdx < 5) {
       setActiveScanFace(FACE_ORDER[currIdx + 1]);
-      setMode("scanning");
+      setMode("SCANNING");
     } else {
-      setMode("completed");
+      setMode("COMPLETED");
       validateFinalCube();
     }
   };
@@ -235,18 +235,18 @@ export default function ScannerPage() {
         {/* Step Indicator */}
         <div className="flex items-center gap-2 mt-5">
           {[
-            { num: 1, label: "Cube Colors", icon: RiPaletteLine, matchMode: ["color_config"] },
-            { num: 2, label: "Scan Faces", icon: RiCameraLine, matchMode: ["scanning", "review", "upload_fallback"] },
-            { num: 3, label: "Validation", icon: RiCheckLine, matchMode: ["completed"] },
+            { num: 1, label: "Cube Colors", icon: RiPaletteLine, matchMode: ["CALIBRATING"] },
+            { num: 2, label: "Scan Faces", icon: RiCameraLine, matchMode: ["SCANNING", "REVIEW", "UPLOAD"] },
+            { num: 3, label: "Validation", icon: RiCheckLine, matchMode: ["COMPLETED"] },
           ].map((s) => {
             const isActive = s.matchMode.includes(mode);
-            const isCompleted = s.num < (mode === "color_config" ? 1 : mode === "completed" ? 4 : 3) && !isActive;
+            const isCompleted = s.num < (mode === "CALIBRATING" ? 1 : mode === "COMPLETED" ? 4 : 3) && !isActive;
             return (
               <button
                 key={s.num}
                 onClick={() => {
-                  if (s.num === 1) setMode("color_config");
-                  else if (isColorMappingSet && mode === "color_config") setMode("scanning");
+                  if (s.num === 1) setMode("CALIBRATING");
+                  else if (isColorMappingSet && mode === "CALIBRATING") setMode("SCANNING");
                 }}
                 className={`manual-step-btn ${isActive ? "active" : ""}`}
               >
@@ -265,7 +265,7 @@ export default function ScannerPage() {
       <AnimatePresence mode="wait">
         
         {/* ─── Mode: Color Config ─── */}
-        {mode === "color_config" && (
+        {mode === "CALIBRATING" && (
           <motion.div
             key="color_config"
             initial={{ opacity: 0, x: 20 }}
@@ -281,7 +281,7 @@ export default function ScannerPage() {
         )}
 
         {/* ─── Mode: Scanning ─── */}
-        {(mode === "scanning" || mode === "review" || mode === "upload_fallback") && (
+        {(mode === "SCANNING" || mode === "REVIEW" || mode === "UPLOAD") && (
           <motion.div
             key="scan_workflow"
             initial={{ opacity: 0, x: 20 }}
@@ -297,7 +297,7 @@ export default function ScannerPage() {
                      key={f}
                      onClick={() => {
                         setActiveScanFace(f);
-                        if (mode === "review") setMode("scanning");
+                        if (mode === "REVIEW") setMode("SCANNING");
                      }}
                      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all
                        ${activeScanFace === f ? "bg-white/10 text-white shadow-sm border border-white/10" : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"}
@@ -308,10 +308,10 @@ export default function ScannerPage() {
                  ))}
                </div>
                
-               {isCountsValid() && mode !== "completed" && (
+               {isCountsValid() && mode !== "COMPLETED" && (
                  <button 
                    onClick={() => {
-                     setMode("completed");
+                     setMode("COMPLETED");
                      validateFinalCube();
                    }} 
                    className="btn-primary text-sm py-2 px-4 shadow-[0_0_15px_rgba(59,130,246,0.3)]"
@@ -326,14 +326,14 @@ export default function ScannerPage() {
               
               {/* Col 1: Webcam/Review/Fallback */}
               <div className="h-full min-h-[300px]">
-                {mode === "scanning" && (
+                {mode === "SCANNING" && (
                   <WebcamScanner 
                     face={activeScanFace}
                     palette={colorMapping}
                     sensitivity={sensitivity}
                     gridSize={gridSize}
                     onCapture={handleCapture}
-                    onBack={() => setMode("upload_fallback")}
+                    onBack={() => setMode("UPLOAD")}
                     onDiagnosticsUpdate={(diag, stable, status, err) => {
                        if (diag) setDiagnostics(diag);
                        setWsStatus(status);
@@ -341,23 +341,24 @@ export default function ScannerPage() {
                     }}
                   />
                 )}
-                {mode === "review" && (
+                {mode === "REVIEW" && (
                   <div className="h-full bg-black/40 border border-white/10 rounded-2xl flex items-center justify-center p-4">
                     <FaceReviewPanel 
                       face={activeScanFace}
                       stickers={reviewStickers}
                       onAccept={handleAcceptFace}
-                      onRescan={() => setMode("scanning")}
+                      onRescan={() => setMode("SCANNING")}
                       onEditSticker={handleEditSticker}
                     />
                   </div>
                 )}
-                {mode === "upload_fallback" && (
+                {mode === "UPLOAD" && (
                   <UploadFallback 
                     face={activeScanFace}
                     palette={colorMapping}
                     onCapture={handleCapture}
-                    onBack={() => setMode("scanning")}
+                    onBack={() => setMode("SCANNING")}
+                    onManualEntry={() => toast.success("Click a square on the 2D Live Map to manually enter colors.", { icon: "👆" })}
                   />
                 )}
               </div>
@@ -395,7 +396,7 @@ export default function ScannerPage() {
                       <CubeNet 
                         onCenterClick={(faceKey) => {
                            setActiveScanFace(faceKey);
-                           if (mode === "review") setMode("scanning");
+                           if (mode === "REVIEW") setMode("SCANNING");
                         }}
                       />
                     </div>
@@ -406,7 +407,7 @@ export default function ScannerPage() {
             </div>
 
             {/* Bottom Zone: Calibration & Diagnostics */}
-            {mode === "scanning" && (
+            {mode === "SCANNING" && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
                  
                  {/* Auto Calibration */}
@@ -420,19 +421,21 @@ export default function ScannerPage() {
                      {/* Grid Size Slider */}
                      <div>
                        <div className="flex justify-between text-xs text-zinc-400 mb-2">
-                         <span>Grid Size</span>
-                         <span className="font-mono text-amber-400">{Math.round(gridSize * 100)}%</span>
+                         <span>Adjust Grid Size</span>
+                         <span className="font-mono text-amber-400">
+                           {gridSize < 0.5 ? "Small" : gridSize > 0.6 ? "Large" : "Medium"}
+                         </span>
                        </div>
                        <input 
                          type="range" 
-                         min="0.4" 
-                         max="0.7" 
+                         min="0.3" 
+                         max="0.8" 
                          step="0.05"
                          value={gridSize}
                          onChange={(e) => setGridSize(parseFloat(e.target.value))}
                          className="w-full accent-amber-400 h-1.5 bg-white/10 rounded-full appearance-none outline-none"
                        />
-                       <p className="text-[10px] text-zinc-500 mt-1">Adjust to fit your physical cube size</p>
+                       <p className="text-[10px] text-zinc-500 mt-1">Scale the grid to fit your physical cube</p>
                      </div>
 
                      {/* Sensitivity */}
@@ -494,7 +497,7 @@ export default function ScannerPage() {
         )}
 
         {/* ─── Mode: Completed ─── */}
-        {mode === "completed" && (
+        {mode === "COMPLETED" && (
           <motion.div
             key="completed"
             initial={{ opacity: 0, y: 20 }}
@@ -540,7 +543,7 @@ export default function ScannerPage() {
                     {validationErrors.map((e, i) => <li key={i}>{e}</li>)}
                   </ul>
                   <button 
-                    onClick={() => setMode("scanning")}
+                    onClick={() => setMode("SCANNING")}
                     className="btn-secondary mt-4 flex items-center gap-2"
                   >
                     <RiEditLine className="w-4 h-4" /> Go Back to Edit
@@ -556,7 +559,7 @@ export default function ScannerPage() {
 
               {isValidated && (
                 <div className="flex gap-4 justify-center">
-                  <button onClick={() => setMode("scanning")} className="btn-secondary">
+                  <button onClick={() => setMode("SCANNING")} className="btn-secondary">
                     Go Back
                   </button>
                   <button onClick={handleSolve} disabled={isSolving} className="btn-primary flex items-center gap-2">

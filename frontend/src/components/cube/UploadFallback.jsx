@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { RiUploadCloud2Line, RiCameraLine, RiArrowLeftLine } from "react-icons/ri";
 import { api } from "@/services/api";
 
-export default function UploadFallback({ face, palette, onCapture, onBack }) {
+export default function UploadFallback({ face, palette, onCapture, onBack, onManualEntry }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState("");
@@ -20,6 +20,11 @@ export default function UploadFallback({ face, palette, onCapture, onBack }) {
 
   const processFile = async (file) => {
     if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setError("File size exceeds 10 MB limit.");
+      return;
+    }
+    
     setIsUploading(true);
     setError("");
 
@@ -58,12 +63,16 @@ export default function UploadFallback({ face, palette, onCapture, onBack }) {
 
   return (
     <div className="manual-card flex flex-col items-center justify-center min-h-[400px]">
-      <div className="w-full flex justify-between items-center mb-6">
+      <div className="w-full flex justify-between items-center mb-2">
         <button onClick={onBack} className="text-zinc-500 hover:text-white transition-colors flex items-center gap-1 text-sm">
            <RiArrowLeftLine /> Back to Camera
         </button>
         <div className="text-xs text-zinc-500 uppercase tracking-widest font-semibold">{face} Face Upload</div>
       </div>
+      
+      <p className="text-xs text-zinc-400 mb-6 max-w-sm text-center">
+        Image upload is less reliable than the live webcam scanner due to lighting, perspective distortion, reflections, and image compression.
+      </p>
 
       <div
         className={`w-full max-w-md aspect-video rounded-2xl border-2 border-dashed flex flex-col items-center justify-center transition-all ${
@@ -105,8 +114,15 @@ export default function UploadFallback({ face, palette, onCapture, onBack }) {
       </div>
 
       {error && (
-        <div className="mt-6 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-400 max-w-md w-full text-center">
-          {error}
+        <div className="mt-6 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-sm max-w-md w-full text-center flex flex-col gap-4">
+          <div className="text-red-400 font-medium">{error}</div>
+          <div className="flex flex-col sm:flex-row gap-2 justify-center">
+            <button onClick={() => {setError(""); fileInputRef.current?.click();}} className="btn-secondary text-xs px-3 py-1.5 flex-1 hover:bg-white/10">Upload Another</button>
+            <button onClick={onBack} className="btn-secondary text-xs px-3 py-1.5 flex-1 hover:bg-white/10">Use Webcam</button>
+            {onManualEntry && (
+              <button onClick={onManualEntry} className="btn-secondary text-xs px-3 py-1.5 flex-1 hover:bg-white/10">Manual Entry</button>
+            )}
+          </div>
         </div>
       )}
     </div>
