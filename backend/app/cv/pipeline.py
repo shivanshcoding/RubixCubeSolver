@@ -5,11 +5,13 @@ Simplified and robust pipeline for exact color preservation.
 Prioritizes center-cropping and raw color metrics over aggressive preprocessing.
 """
 
+from numpy.ma import masked
 import cv2
 import hashlib
 import json
 import time
 import os
+import contextlib
 import numpy as np
 from collections import deque
 from dataclasses import dataclass, field
@@ -49,20 +51,23 @@ class PipelineConfig:
     # Relaxed thresholds to preserve true colors.
     value_ceiling: int = 250        # discard extreme specular highlights
     value_floor: int = 15           # discard extreme shadows
+    enable_saturation_filter: bool = False
+    saturation_floor: int = 40      # minimum saturation if filter enabled
 
     # ── Dynamic HSV Classification ───────────────────────────────
-    hue_tolerance: int = 10
-    saturation_tolerance: int = 60
-    value_tolerance: int = 60
+    hue_tolerance: int = 15
+    saturation_tolerance: int = 120
+    value_tolerance: int = 120
     white_saturation_offset: int = 40
     white_value_offset: int = 40
     min_valid_pixels: int = 15
     min_confidence_threshold: float = 0.6
     morph_kernel_size: int = 3
 
-    # ── Palette validation (ΔE76 in CIE LAB) ────────────────────
-    de_threshold_poor: float = 20.0
-    de_threshold_acceptable: float = 35.0
+    # ── Palette validation ───────────────────────────────────────
+    de_threshold_poor: float = 30.0
+    de_threshold_acceptable: float = 45.0
+    hue_threshold_poor: float = 18.0
 
     # ── Temporal smoothing ───────────────────────────────────────
     temporal_window: int = 8        # rolling history length
@@ -142,12 +147,11 @@ def generate_hsv_ranges(palette_hex: Dict[str, str], palette_labs: Dict[str, np.
             ranges[face] = [(lower, upper)]
         else:
             h_tol = config.hue_tolerance
-            
-            # Widen blue tolerance, tighten red/orange tolerance
-            if 100 <= h <= 140: # Blue/cyan range
-                h_tol += 5
-            elif (0 <= h <= 25) or (160 <= h <= 179): # Red/orange range
-                h_tol = max(5, h_tol - 3)
+            if 45 <= h <= 85: h_tol = 18 # Green
+            elif 90 <= h <= 140: h_tol = 18 # Blue
+            elif 25 <= h <= 45: h_tol = 18 # Yellow
+            elif 10 < h < 25: h_tol = 15 # Orange
+            elif (0 <= h <= 10) or (160 <= h <= 179): h_tol = 15 # Red
                 
             s_min = max(0, s - config.saturation_tolerance)
             s_max = min(255, s + config.saturation_tolerance)
@@ -234,56 +238,76 @@ def validate_palette(
             "minimum_distance": 0.0, "average_distance": 0.0,
             "distances": {}, "warnings": [str(e)],
         }
+        
+    # Get HSV representations for hue checking
+    hsvs: Dict[str, Tuple[float, float, float]] = {}
+    for face, hex_code in palette.items():
+        r, g, b = hex_to_rgb(hex_code)
+        bgr = np.array([[[b, g, r]]], dtype=np.uint8)
+        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)[0, 0]
+        hsvs[face] = (float(hsv[0]), float(hsv[1]), float(hsv[2]))
 
     faces = list(labs.keys())
-    distances: Dict[str, float] = {}
-    all_dists: List[float] = []
-    min_dist = float("inf")
-    worst_pair: Optional[Tuple[str, str]] = None
-    warnings: List[str] = []
+    min_dist_lab = float("inf")
+    worst_pair_lab = None
+    min_dist_hue = float("inf")
+    
+    warnings = []
 
     for i in range(len(faces)):
         for j in range(i + 1, len(faces)):
             f1, f2 = faces[i], faces[j]
-            d = delta_e_76(labs[f1], labs[f2])
-            distances[f"{f1}-{f2}"] = round(d, 1)
-            all_dists.append(d)
-            if d < min_dist:
-                min_dist = d
-                worst_pair = (f1, f2)
-            if d < config.de_threshold_acceptable:
-                label1 = FACE_LABELS.get(f1, f1)
-                label2 = FACE_LABELS.get(f2, f2)
-                warnings.append(
-                    f"{label1} ({f1}) and {label2} ({f2}) are close "
-                    f"(ΔE = {d:.1f}). Consider choosing more distinct shades."
-                )
+            d_lab = delta_e_76(labs[f1], labs[f2])
+            
+            # OpenCV hue is 0-179, multiply by 2 for degrees
+            h1 = hsvs[f1][0] * 2
+            h2 = hsvs[f2][0] * 2
+            d_hue = min(abs(h1 - h2), 360 - abs(h1 - h2))
+            
+            if d_lab < min_dist_lab:
+                min_dist_lab = d_lab
+                worst_pair_lab = (f1, f2)
+                min_dist_hue = d_hue
+                
+            # Warnings based on common confusing pairs
+            label1 = FACE_LABELS.get(f1, f1)
+            label2 = FACE_LABELS.get(f2, f2)
+            if (f1 == 'L' and f2 == 'R') or (f1 == 'R' and f2 == 'L'):
+                if d_hue < 20: warnings.append(f"Warning: Orange and Red are very close (Hue diff: {d_hue:.1f}°)")
+            if (f1 == 'U' and f2 == 'D') or (f1 == 'D' and f2 == 'U'):
+                if d_lab < 35: warnings.append(f"Warning: White and Yellow are very close in brightness (LAB diff: {d_lab:.1f})")
+            if (f1 == 'F' and f2 == 'D') or (f1 == 'D' and f2 == 'F'):
+                if d_hue < 25: warnings.append(f"Warning: Green and Yellow are very close (Hue diff: {d_hue:.1f}°)")
 
-    avg_dist = float(np.mean(all_dists)) if all_dists else 0.0
-
-    if min_dist < config.de_threshold_poor:
+    worst_l1 = FACE_LABELS.get(worst_pair_lab[0], worst_pair_lab[0])
+    worst_l2 = FACE_LABELS.get(worst_pair_lab[1], worst_pair_lab[1])
+    
+    if min_dist_lab < config.de_threshold_poor or min_dist_hue < config.hue_threshold_poor:
         status = "POOR"
-        label1 = FACE_LABELS.get(worst_pair[0], worst_pair[0])
-        label2 = FACE_LABELS.get(worst_pair[1], worst_pair[1])
-        message = (
-            f"The selected {label1} and {label2} colours are too similar "
-            f"for reliable detection (ΔE = {min_dist:.1f}). "
-            f"Please choose colours with greater visual separation."
-        )
-    elif min_dist < config.de_threshold_acceptable:
+        suffix = "Colors are too similar for reliable detection. Please select more distinct shades."
+    elif min_dist_lab < config.de_threshold_acceptable:
         status = "ACCEPTABLE"
-        message = "Detection should work, but some colours are relatively close."
+        suffix = "Detection should work, but some colors are relatively close."
     else:
         status = "GOOD"
-        message = "Palette is suitable for cube detection."
+        suffix = "This palette is suitable for robust webcam detection."
+
+    message = (
+        f"Closest Pair: {worst_l1} ↔ {worst_l2}\n"
+        f"LAB Distance: {min_dist_lab:.1f}\n"
+        f"Hue Difference: {min_dist_hue:.1f}°\n\n"
+        f"{suffix}"
+    )
+    if warnings:
+        message += "\n\n" + "\n".join(warnings)
 
     return {
         "success": True,
         "status": status,
         "message": message,
-        "minimum_distance": round(min_dist, 1),
-        "average_distance": round(avg_dist, 1),
-        "distances": distances,
+        "minimum_distance": round(min_dist_lab, 1),
+        "average_distance": 0.0,
+        "distances": {},
         "warnings": warnings,
     }
 
@@ -340,22 +364,56 @@ def _crop_center(patch: np.ndarray, config: PipelineConfig = DEFAULT_CONFIG) -> 
 def remove_glare_and_shadows(
     hsv_patch: np.ndarray,
     config: PipelineConfig = DEFAULT_CONFIG,
-) -> np.ndarray:
-    """Lightweight masking: only discard extreme highlights and extreme shadows."""
+) -> Tuple[np.ndarray, Dict]:
+    """Incrementally build validity mask and track pixel drop-off for debugging."""
+    total_pixels = hsv_patch.shape[0] * hsv_patch.shape[1]
     v_ch = hsv_patch[:, :, 2]
-    valid = np.ones(v_ch.shape, dtype=np.uint8) * 255
-    valid[v_ch > config.value_ceiling] = 0   # extreme glare
-    valid[v_ch < config.value_floor] = 0     # extreme shadow
-    return valid
+    s_ch = hsv_patch[:, :, 1]
+    
+    valid_mask = np.ones(v_ch.shape, dtype=np.uint8) * 255
+    
+    # 1. Low Value Filter (Shadows)
+    low_value_mask = (v_ch >= config.value_floor).astype(np.uint8) * 255
+    valid_mask = cv2.bitwise_and(valid_mask, low_value_mask)
+    after_value = int(np.sum(valid_mask > 0))
+    
+    # 2. Saturation Filter (Optional)
+    low_sat_mask = np.ones_like(valid_mask) * 255
+    if config.enable_saturation_filter:
+        low_sat_mask = (s_ch >= config.saturation_floor).astype(np.uint8) * 255
+        valid_mask = cv2.bitwise_and(valid_mask, low_sat_mask)
+    after_sat = int(np.sum(valid_mask > 0))
+    
+    # 3. Glare Filter (High Value)
+    glare_mask = (v_ch <= config.value_ceiling).astype(np.uint8) * 255
+    valid_mask = cv2.bitwise_and(valid_mask, glare_mask)
+    after_glare = int(np.sum(valid_mask > 0))
+    
+    stats = {
+        "total": total_pixels,
+        "after_value": after_value,
+        "after_sat": after_sat,
+        "after_glare": after_glare,
+        "masks": {
+            "low_value": low_value_mask,
+            "low_sat": low_sat_mask,
+            "glare": glare_mask,
+            "final": valid_mask
+        }
+    }
+    return valid_mask, stats
 
 
 def preprocess_patch(
     patch: np.ndarray,
     config: PipelineConfig = DEFAULT_CONFIG,
-) -> Tuple[np.ndarray, np.ndarray, Dict]:
+    patch_idx: int = 0,
+    is_debug_frame: bool = False,
+    debug_dir: str = "",
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Dict]:
     """Simplified preprocessing pipeline for a single center-cropped sticker patch.
     Returns:
-        (bgr_patch, validity_mask, prep_stats)
+        (bgr_patch, hsv_patch, validity_mask, prep_stats)
     """
     stats = {}
     
@@ -364,15 +422,58 @@ def preprocess_patch(
         p = cv2.medianBlur(patch, config.median_blur_ksize)
     else:
         p = patch.copy()
-    stats["blur_ms"] = (time.perf_counter() - t0) * 1000
-    stats["blur_ksize"] = config.median_blur_ksize
+    stats["Median Blur"] = (time.perf_counter() - t0) * 1000
     
     t0 = time.perf_counter()
     hsv = cv2.cvtColor(p, cv2.COLOR_BGR2HSV)
-    mask = remove_glare_and_shadows(hsv, config)
-    stats["mask_ms"] = (time.perf_counter() - t0) * 1000
+    stats["HSV Conversion"] = (time.perf_counter() - t0) * 1000
     
-    return p, mask, stats
+    t0 = time.perf_counter()
+    mask, mask_stats = remove_glare_and_shadows(hsv, config)
+    stats["Validity Mask"] = (time.perf_counter() - t0) * 1000
+    stats["mask_stats"] = mask_stats
+    
+    if is_debug_frame and debug_dir:
+        patch_dir = os.path.join(debug_dir, f"patch_{patch_idx}")
+        os.makedirs(patch_dir, exist_ok=True)
+        cv2.imwrite(os.path.join(patch_dir, f"patch_{patch_idx}_original.jpg"), patch)
+        cv2.imwrite(os.path.join(patch_dir, f"patch_{patch_idx}_hsv.jpg"), hsv)
+        cv2.imwrite(os.path.join(patch_dir, f"patch_{patch_idx}_low_value_mask.jpg"), mask_stats["masks"]["low_value"])
+        cv2.imwrite(os.path.join(patch_dir, f"patch_{patch_idx}_low_saturation_mask.jpg"), mask_stats["masks"]["low_sat"])
+        cv2.imwrite(os.path.join(patch_dir, f"patch_{patch_idx}_glare_mask.jpg"), mask_stats["masks"]["glare"])
+        cv2.imwrite(os.path.join(patch_dir, f"patch_{patch_idx}_validity_mask.jpg"), mask_stats["masks"]["final"])
+        
+        valid_pixels_img = cv2.bitwise_and(patch, patch, mask=mask)
+        cv2.imwrite(os.path.join(patch_dir, f"patch_{patch_idx}_final_valid_pixels.jpg"), valid_pixels_img)
+
+        print("\n" + "=" * 70)
+        print(f"PATCH {patch_idx} PREPROCESSING")
+        print("=" * 70)
+        print("\n------------------------------------")
+        print("VALIDITY MASK ANALYSIS")
+        print("------------------------------------")
+        t = mask_stats["total"]
+        print(f"Total Pixels : {t}")
+        print(f"Removed by Low Value Filter : {t - mask_stats['after_value']}")
+        print(f"Removed by Saturation Filter : {mask_stats['after_value'] - mask_stats['after_sat']}")
+        print(f"Removed by Glare Filter : {mask_stats['after_sat'] - mask_stats['after_glare']}")
+        print(f"Pixels Remaining : {mask_stats['after_glare']}")
+        print(f"Validity Percentage : {(mask_stats['after_glare'] / max(t, 1) * 100):.1f}%")
+        
+        print("\n------------------------------------")
+        print("PIXEL FLOW")
+        print("------------------------------------")
+        print(f"Original Pixels : {t}")
+        print(f"  ↓")
+        print(f"After Value Filter : {mask_stats['after_value']}")
+        print(f"  ↓")
+        print(f"After Saturation Filter : {mask_stats['after_sat']}")
+        print(f"  ↓")
+        print(f"After Glare Filter : {mask_stats['after_glare']}")
+        print(f"  ↓")
+        print(f"Final Valid Pixels : {mask_stats['after_glare']}\n")
+    
+    return p, hsv, mask, stats
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -381,24 +482,34 @@ def preprocess_patch(
 
 def representative_color(
     bgr_patch: np.ndarray,
+    hsv_patch: np.ndarray,
     mask: np.ndarray,
 ) -> Dict[str, np.ndarray]:
     """Compute the Median BGR of the valid pixels, then convert directly to LAB."""
     valid_pixels = bgr_patch[mask > 0]
+    valid_hsv = hsv_patch[mask > 0]
 
-    # Fallback if too few pixels survived masking
-    if len(valid_pixels) < 5:
-        valid_pixels = bgr_patch.reshape(-1, 3)
+    # Handle case where no pixels survived masking
+    if len(valid_pixels) == 0:
+        return {
+            "bgr": np.zeros(3, dtype=np.float64),
+            "hsv": np.zeros(3, dtype=np.float64),
+            "hsv_min": np.zeros(3, dtype=np.float64),
+            "hsv_max": np.zeros(3, dtype=np.float64),
+            "lab": np.zeros(3, dtype=np.float64),
+            "valid_pixels": 0
+        }
 
     # Simple median is robust to noise and slight glare/shadow variation
     bgr_med = np.median(valid_pixels, axis=0).astype(np.float64)
     
+    hsv_min = np.min(valid_hsv, axis=0)
+    hsv_max = np.max(valid_hsv, axis=0)
+    hsv_med = np.median(valid_hsv, axis=0).astype(np.float64)
+    
     # Convert BGR float to LAB float
     # We create a 1x1 uint8 image to use OpenCV's conversion, then scale correctly
     bgr_uint8 = np.array([[[int(bgr_med[0]), int(bgr_med[1]), int(bgr_med[2])]]], dtype=np.uint8)
-    
-    hsv_cv = cv2.cvtColor(bgr_uint8, cv2.COLOR_BGR2HSV)[0, 0]
-    hsv_med = hsv_cv.astype(np.float64)
     
     lab_cv = cv2.cvtColor(bgr_uint8, cv2.COLOR_BGR2LAB)[0, 0]
     L = lab_cv[0] * (100.0 / 255.0)
@@ -409,7 +520,10 @@ def representative_color(
     return {
         "bgr": bgr_med,
         "hsv": hsv_med,
+        "hsv_min": hsv_min,
+        "hsv_max": hsv_max,
         "lab": lab_float,
+        "valid_pixels": len(valid_pixels)
     }
 
 
@@ -419,34 +533,134 @@ def representative_color(
 
 def classify_patch_hsv(
     bgr_patch: np.ndarray,
+    hsv_patch: np.ndarray,
     glare_mask: np.ndarray,
     hsv_ranges: Dict[str, List[Tuple[np.ndarray, np.ndarray]]],
     white_face: str,
     palette_labs: Dict[str, np.ndarray],
     config: PipelineConfig = DEFAULT_CONFIG,
+    patch_idx: int = 0,
+    is_debug_frame: bool = False,
+    debug_dir: str = "",
+    raw_patch: Optional[np.ndarray] = None,
+    center_patch: Optional[np.ndarray] = None,
 ) -> Dict:
     """Classify a sticker using dynamic HSV segmentation, morphological cleanup, and LAB tie-breaking."""
-    hsv_patch = cv2.cvtColor(bgr_patch, cv2.COLOR_BGR2HSV)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (config.morph_kernel_size, config.morph_kernel_size))
     
     pixel_counts = {}
     face_masks = {}
-    
-    total_valid_pixels = 0
-    
+
+    rep = representative_color(bgr_patch, hsv_patch, glare_mask)
+    rep_hsv = rep['hsv']
+    h, s, v = int(rep_hsv[0]), int(rep_hsv[1]), int(rep_hsv[2])
+
+    if is_debug_frame:
+        print("\n" + "=" * 70)
+        print(f"PATCH {patch_idx}")
+        print("=" * 70)
+        print("\nRepresentative Colour")
+        print("-" * 21)
+        if rep["valid_pixels"] == 0:
+            print("No valid pixels after masking.")
+        else:
+            print(f"Median BGR : ({int(rep['bgr'][0])}, {int(rep['bgr'][1])}, {int(rep['bgr'][2])})")
+            print(f"Median HSV : ({int(rep['hsv'][0])}, {int(rep['hsv'][1])}, {int(rep['hsv'][2])})")
+            print(f"Minimum HSV : ({int(rep['hsv_min'][0])}, {int(rep['hsv_min'][1])}, {int(rep['hsv_min'][2])})")
+            print(f"Maximum HSV : ({int(rep['hsv_max'][0])}, {int(rep['hsv_max'][1])}, {int(rep['hsv_max'][2])})")
+            print(f"Median LAB : ({int(rep['lab'][0])}, {int(rep['lab'][1])}, {int(rep['lab'][2])})")
+            
+        print("\nHue Histogram (Valid Pixels)")
+        print("-" * 28)
+        valid_hsv = hsv_patch[glare_mask > 0]
+        if len(valid_hsv) > 0:
+            valid_hues = valid_hsv[:, 0]
+            for i in range(0, 180, 10):
+                count = np.sum((valid_hues >= i) & (valid_hues < i + 10))
+                if count > 0:
+                    print(f"{i:3d} - {i+10:<3d} : {count} pixels")
+        else:
+            print("No valid pixels to histogram.")
+        print("")
+
+    if rep["valid_pixels"] == 0:
+        if is_debug_frame:
+            print("No valid pixels remained after preprocessing. Classification failed.")
+        return {
+            "face": "U",
+            "confidence": 0.0,
+            "reason": "No valid pixels after preprocessing",
+            "classification_failed": True
+        }
+
+    face_names = {"U": "WHITE", "D": "YELLOW", "F": "GREEN", "B": "BLUE", "R": "RED", "L": "ORANGE"}
+
+    patch_dir = os.path.join(debug_dir, f"patch_{patch_idx}") if is_debug_frame else ""
+    if is_debug_frame and patch_dir:
+        os.makedirs(patch_dir, exist_ok=True)
+        if raw_patch is not None:
+            cv2.imwrite(os.path.join(debug_dir, f"patch_{patch_idx}_raw.jpg"), raw_patch)
+        if center_patch is not None:
+            cv2.imwrite(os.path.join(debug_dir, f"patch_{patch_idx}_center.jpg"), center_patch)
+        cv2.imwrite(os.path.join(debug_dir, f"patch_{patch_idx}_processed.jpg"), bgr_patch)
+        
+    mask_imgs = {}
+
     for face, ranges in hsv_ranges.items():
+        name = face_names.get(face, face)
+        if is_debug_frame:
+            print("-" * 42)
+            print(f"{name}")
+            print("-" * 42)
+            print("\nGenerated HSV Range(s)")
+            for i, (lower, upper) in enumerate(ranges):
+                print(f"\nRange {i+1}")
+                print(f"H : {lower[0]}–{upper[0]}")
+                print(f"S : {lower[1]}–{upper[1]}")
+                print(f"V : {lower[2]}–{upper[2]}")
+
+            h_pass, s_pass, v_pass = False, False, False
+            for (lower, upper) in ranges:
+                if lower[0] <= h <= upper[0]: h_pass = True
+                if lower[1] <= s <= upper[1]: s_pass = True
+                if lower[2] <= v <= upper[2]: v_pass = True
+            
+            if len(ranges) == 1 and ranges[0][0][0] == 0 and ranges[0][1][0] == 179:
+                h_pass = True 
+                
+            print(f"\nHue {'PASS' if h_pass else 'FAIL'}")
+            print(f"Saturation {'PASS' if s_pass else 'FAIL'}")
+            print(f"Value {'PASS' if v_pass else 'FAIL'}")
+            print(f"Overall {'PASS' if (h_pass and s_pass and v_pass) else 'FAIL'}\n")
+
         face_mask = np.zeros(hsv_patch.shape[:2], dtype=np.uint8)
+        pixels_after_inrange = 0
+        pixels_after_or = 0
+        
         for (lower, upper) in ranges:
             m = cv2.inRange(hsv_patch, lower, upper)
+            pixels_after_inrange = int(np.sum(m > 0))
             face_mask = cv2.bitwise_or(face_mask, m)
             
+        pixels_after_or = int(np.sum(face_mask > 0))
+
         # Morphological Cleanup
+        pixels_after_open = pixels_after_or
+        pixels_after_close = pixels_after_or
         if config.morph_kernel_size > 0:
             face_mask = cv2.morphologyEx(face_mask, cv2.MORPH_OPEN, kernel)
+            pixels_after_open = int(np.sum(face_mask > 0))
             face_mask = cv2.morphologyEx(face_mask, cv2.MORPH_CLOSE, kernel)
+            pixels_after_close = int(np.sum(face_mask > 0))
             
         # Apply the glare/shadow mask
         face_mask = cv2.bitwise_and(face_mask, glare_mask)
+        pixels_after_glare = int(np.sum(face_mask > 0))
+        
+        white_rejected = False
+        white_reason = ""
+        white_a = 0.0
+        white_b = 0.0
         
         # Secondary check for white (a and b should be near 0 in LAB space)
         if face == white_face:
@@ -455,16 +669,50 @@ def classify_patch_hsv(
                 bgr_mean = np.mean(white_pixels, axis=0)
                 bgr_uint8 = np.array([[[int(bgr_mean[0]), int(bgr_mean[1]), int(bgr_mean[2])]]], dtype=np.uint8)
                 lab_cv = cv2.cvtColor(bgr_uint8, cv2.COLOR_BGR2LAB)[0, 0]
-                a = lab_cv[1] - 128.0
-                b = lab_cv[2] - 128.0
-                if abs(a) > 20 or abs(b) > 20:
+                white_a = lab_cv[1] - 128.0
+                white_b = lab_cv[2] - 128.0
+                if abs(white_a) > 20 or abs(white_b) > 20:
                     face_mask[:] = 0 # Not neutral enough to be white
-        
+                    white_rejected = True
+                    white_reason = "Not neutral enough."
+                    pixels_after_glare = 0
+
         count = int(np.sum(face_mask > 0))
         pixel_counts[face] = count
         face_masks[face] = face_mask
-        total_valid_pixels += count
         
+        if is_debug_frame:
+            print(f"Pixels after inRange : {pixels_after_inrange}")
+            print(f"Pixels after OR : {pixels_after_or}")
+            print(f"Pixels after Morph OPEN : {pixels_after_open}")
+            print(f"Pixels after Morph CLOSE : {pixels_after_close}")
+            print(f"Pixels after Validity Mask : {pixels_after_glare}")
+            print(f"Final Pixel Count : {count}")
+            
+            if face == white_face:
+                print("\nWhite Neutral Check")
+                print(f"a = {white_a:.1f}")
+                print(f"b = {white_b:.1f}")
+                if white_rejected:
+                    print("White rejected")
+                    print(f"Reason: {white_reason}")
+                else:
+                    print("PASS")
+                    
+            # Save individual mask
+            mask_bgr = cv2.cvtColor(face_mask, cv2.COLOR_GRAY2BGR)
+            cv2.putText(mask_bgr, name, (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
+            mask_imgs[face] = mask_bgr
+            cv2.imwrite(os.path.join(patch_dir, f"{name.lower()}_mask.png"), face_mask)
+
+    if is_debug_frame and mask_imgs:
+        face_order = ["U", "D", "F", "B", "L", "R"]
+        ordered_masks = [mask_imgs.get(f, np.zeros_like(bgr_patch)) for f in face_order]
+        row1 = np.hstack(ordered_masks[0:3])
+        row2 = np.hstack(ordered_masks[3:6])
+        collage = np.vstack([row1, row2])
+        cv2.imwrite(os.path.join(debug_dir, f"patch_{patch_idx}_masks.jpg"), collage)
+
     sorted_faces = sorted(pixel_counts.keys(), key=lambda f: pixel_counts[f], reverse=True)
     winner = sorted_faces[0]
     runner_up = sorted_faces[1]
@@ -472,29 +720,21 @@ def classify_patch_hsv(
     winner_pixels = pixel_counts[winner]
     runner_up_pixels = pixel_counts[runner_up]
     
-    if total_valid_pixels < config.min_valid_pixels or winner_pixels < config.min_valid_pixels:
-        # Fallback to LAB if all HSV masks fail
-        rep = representative_color(bgr_patch, glare_mask)
-        dists = {f: delta_e_76(rep["lab"], ref) for f, ref in palette_labs.items()}
-        sorted_lab = sorted(dists, key=dists.get)
-        return {
-            "face": sorted_lab[0],
-            "runner_up": sorted_lab[1],
-            "confidence": 0.5, # low confidence for fallback
-            "pixel_counts": pixel_counts,
-            "face_masks": face_masks,
-            "reason": "HSV masks failed. LAB Fallback used."
-        }
-        
-    winner_ratio = winner_pixels / total_valid_pixels
-    margin = winner_pixels - runner_up_pixels
+    dists = {f: delta_e_76(rep["lab"], ref) for f, ref in palette_labs.items()}
+    sorted_lab = sorted(dists, key=dists.get)
     
-    confidence = winner_ratio * 0.7 + (margin / total_valid_pixels) * 0.3
+    confidence = winner_pixels / (winner_pixels + runner_up_pixels + 1e-6)
     reason = "Dominant HSV mask."
     
+    if winner_pixels < config.min_valid_pixels:
+        # Fallback to LAB if all HSV masks fail
+        winner = sorted_lab[0]
+        runner_up = sorted_lab[1]
+        reason = "HSV masks failed. LAB Fallback used."
+        confidence = 0.5
+        
     # LAB Tie-break if ambiguous
-    if confidence < config.min_confidence_threshold and runner_up_pixels > 0:
-        # Check LAB distance for winner and runner up
+    if reason != "HSV masks failed. LAB Fallback used." and confidence < config.min_confidence_threshold and runner_up_pixels > 0:
         winner_mask = face_masks[winner]
         runner_up_mask = face_masks[runner_up]
         
@@ -518,11 +758,31 @@ def classify_patch_hsv(
             d_runner = delta_e_76(r_lab, palette_labs[runner_up])
             
             if d_runner < d_winner - 5.0:
-                # Runner up is significantly closer in LAB space, override!
                 winner, runner_up = runner_up, winner
                 reason = "LAB Tie-break override."
-                confidence = 0.55 # Marginal confidence
+                confidence = 0.55 
                 
+    if is_debug_frame:
+        print("\n------------------------------------------")
+        print("FINAL PIXEL COUNTS")
+        print("------------------------------------------")
+        for f, count in pixel_counts.items():
+            print(f"{face_names.get(f, f)} : {count}")
+            
+        print(f"\nWinner : {face_names.get(winner, winner)}")
+        print(f"Runner Up : {face_names.get(runner_up, runner_up)}")
+        print(f"Confidence : {confidence:.2f}")
+        print(f"Reason : {reason}")
+        
+        print("\nLAB DISTANCES")
+        for f, dist in dists.items():
+            print(f"{face_names.get(f, f)} : {dist:.1f}")
+            
+        if "Fallback" in reason or "Tie-break" in reason:
+            print(f"\nWinner : {face_names.get(winner, winner)}")
+            print(f"Runner Up : {face_names.get(runner_up, runner_up)}")
+            print(f"Reason : {reason}")
+
     return {
         "face": winner,
         "runner_up": runner_up,
@@ -773,54 +1033,6 @@ def _generate_debug_output(
         print("")
             
     print("====================================")
-    print("FOR EVERY PATCH")
-    print("====================================")
-    for i, diag in enumerate(sticker_diags):
-        print(f"Patch Number : {i+1}")
-        x, y, w, h = overlay_coords[i]
-        print(f"Coordinates  : x={x}, y={y}")
-        print(f"Width        : {w}")
-        print(f"Height       : {h}")
-        
-        rep = reps[i]
-        bgr = rep['bgr']
-        hsv = rep['hsv']
-        lab = rep['lab']
-        print(f"Representative BGR : ({int(bgr[0])},{int(bgr[1])},{int(bgr[2])})")
-        print(f"Representative HSV : ({int(hsv[0])},{int(hsv[1])},{int(hsv[2])})")
-        print(f"Representative LAB : ({int(lab[0])},{int(lab[1])},{int(lab[2])})")
-        
-        cls = classifications[i]
-        print("\nPIXEL COUNTS")
-        # Ensure we map letters to names for counts
-        face_names = {"U": "White", "D": "Yellow", "F": "Green", "B": "Blue", "R": "Red", "L": "Orange"}
-        for f, count in cls["pixel_counts"].items():
-            print(face_names.get(f, f))
-            print(f"{count}")
-            
-        print("\nCLASSIFICATION")
-        print(f"Winner       : {cls['face']}")
-        print(f"Runner Up    : {cls['runner_up']}")
-        print(f"Confidence   : {cls['confidence']:.2f}")
-        print(f"Reason       : {cls.get('reason', 'Unknown')}")
-        
-        if "Fallback" in cls.get("reason", ""):
-            print("HSV classification failed, LAB fallback triggered.")
-            print("\nLAB FALLBACK")
-            for f, dist in cls.get("all_dists", {}).items():
-                print(f"Distance to {face_names.get(f, f)} : {dist:.1f}")
-            print(f"Winner : {cls['face']}")
-            
-        t_dbg = temporal_debug[i]
-        print("\nTEMPORAL SMOOTHER")
-        print(f"History            : {' '.join(t_dbg['history'])}")
-        print(f"Majority           : {t_dbg['majority']}")
-        print(f"Majority %         : {t_dbg['majority_pct']:.1f}%")
-        print(f"Average Confidence : {t_dbg['avg_conf']:.2f}")
-        print(f"Stable             : {'YES' if t_dbg['stable'] else 'NO'}\n")
-        print("-" * 40 + "\n")
-        
-    print("====================================")
     print("FINAL OUTPUT")
     print("====================================")
     print("Generated Face")
@@ -846,6 +1058,18 @@ def _generate_debug_output(
     print(f"Temporal Time         : {timings.get('Temporal', 0) * 1000:.1f} ms")
     print(f"Diagnostics Time      : {timings.get('Diagnostics', 0) * 1000:.1f} ms")
     print("\n")
+    # Images are now saved directly in classify_patch_hsv per the user's instructions.
+    
+def overlay_coords_overlay(frame, overlay_coords, center_patches):
+    overlay_img = frame.copy()
+    for i, (x, y, w, h) in enumerate(overlay_coords):
+        cv2.rectangle(overlay_img, (x, y), (x+w, y+h), (0, 0, 255), 2)
+        c_patch = center_patches[i]
+        ch, cw = c_patch.shape[:2]
+        cx = x + (w - cw) // 2
+        cy = y + (h - ch) // 2
+        cv2.rectangle(overlay_img, (cx, cy), (cx+cw, cy+ch), (0, 255, 0), 2)
+    return overlay_img
 
 def process_patches(
     frame: np.ndarray,
@@ -874,62 +1098,92 @@ def process_patches(
     masks: List[np.ndarray] = []
     reps: List[Dict] = []
 
-    t0 = time.perf_counter()
-    for i, c_patch in enumerate(center_patches):
-        # 3. Preprocess (Blur + Glare/Shadow masking)
-        bgr_cleaned, mask, prep_stats = preprocess_patch(c_patch, config)
-        processed_patches.append(bgr_cleaned)
-        masks.append(mask)
-        
-        # 4. Representative Colour (Median BGR of valid pixels)
-        rep = representative_color(bgr_cleaned, mask)
-        reps.append(rep)
-        
-        # 5. Classification
-        cls = classify_patch_hsv(
-            bgr_cleaned, mask, 
-            hsv_ranges, white_face, 
-            palette_labs, config
-        )
-        classifications.append(cls)
-        
-        # 6. Diagnostics
-        diag = _sticker_diagnostics(raw_patches[i], bgr_cleaned, mask, rep, cls, prep_stats)
-        sticker_diags.append(diag)
-    timings["PreprocessingAndClassification"] = time.perf_counter() - t0
-
-    t0 = time.perf_counter()
-    # 7. Temporal Smoothing
-    face_stable, square_stable, stable_labels, temporal_debug = smoother.update(classifications)
-    timings["Temporal"] = time.perf_counter() - t0
-
-    stickers = []
-    for i, cls in enumerate(classifications):
-        label = stable_labels[i] if square_stable[i] else cls["face"]
-        stickers.append({
-            "color": palette_hex.get(label, "unknown"),
-            "confidence": cls["confidence"],
-            "stable": square_stable[i],
-            "diagnostics": sticker_diags[i],
-        })
-
-    t0 = time.perf_counter()
-    diagnostics = calculate_diagnostics(frame)
-    timings["Diagnostics"] = time.perf_counter() - t0
-    
-    # 8. Debugging
+    is_debug_frame = False
+    debug_dir = ""
     if DEBUG_MODE and debug_state is not None:
-        debug_state.frame_counter += 1
-        if debug_state.frame_counter == DEBUG_FRAME:
-            _generate_debug_output(
-                frame, fps, debug_state,
-                palette_hex, palette_labs, hsv_ranges, base_hsvs,
-                overlay_coords,
-                raw_patches, center_patches, processed_patches, masks,
-                classifications, reps, sticker_diags,
-                stable_labels, square_stable, diagnostics,
-                temporal_debug, timings
+        if debug_state.frame_counter + 1 == DEBUG_FRAME:
+            is_debug_frame = True
+            debug_dir = f"debug/frame_{DEBUG_FRAME}"
+            os.makedirs(debug_dir, exist_ok=True)
+            cv2.imwrite(os.path.join(debug_dir, "frame.jpg"), frame)
+            cv2.imwrite(os.path.join(debug_dir, "overlay.jpg"), overlay_coords_overlay(frame, overlay_coords, center_patches))
+
+    debug_f = None
+    debug_ctx = None
+    if is_debug_frame:
+        debug_f = open(os.path.join(debug_dir, "debug_log.txt"), "w", encoding="utf-8")
+        debug_ctx = contextlib.redirect_stdout(debug_f)
+        debug_ctx.__enter__()
+
+    try:
+        t0 = time.perf_counter()
+        for i, c_patch in enumerate(center_patches):
+            # 3. Preprocess (Blur + Glare/Shadow masking)
+            bgr_cleaned, hsv_cleaned, mask, prep_stats = preprocess_patch(
+                c_patch, config, patch_idx=i+1, is_debug_frame=is_debug_frame, debug_dir=debug_dir
             )
+            processed_patches.append(bgr_cleaned)
+            masks.append(mask)
+            
+            # 4. Representative Colour (Median BGR of valid pixels)
+            rep = representative_color(bgr_cleaned, hsv_cleaned, mask)
+            reps.append(rep)
+            
+            # 5. Classification
+            cls = classify_patch_hsv(
+                bgr_cleaned, hsv_cleaned, mask, 
+                hsv_ranges, white_face, 
+                palette_labs, config,
+                patch_idx=i+1,
+                is_debug_frame=is_debug_frame,
+                debug_dir=debug_dir,
+                raw_patch=raw_patches[i],
+                center_patch=center_patches[i]
+            )
+            classifications.append(cls)
+            
+            # 6. Diagnostics
+            diag = _sticker_diagnostics(raw_patches[i], bgr_cleaned, mask, rep, cls, prep_stats)
+            sticker_diags.append(diag)
+        timings["PreprocessingAndClassification"] = time.perf_counter() - t0
+
+        t0 = time.perf_counter()
+        # 7. Temporal Smoothing
+        face_stable, square_stable, stable_labels, temporal_debug = smoother.update(classifications)
+        timings["Temporal"] = time.perf_counter() - t0
+
+        stickers = []
+        for i, cls in enumerate(classifications):
+            label = stable_labels[i] if square_stable[i] else cls["face"]
+            stickers.append({
+                "color": palette_hex.get(label, "unknown"),
+                "confidence": cls["confidence"],
+                "stable": square_stable[i],
+                "diagnostics": sticker_diags[i],
+            })
+
+        t0 = time.perf_counter()
+        diagnostics = calculate_diagnostics(frame)
+        timings["Diagnostics"] = time.perf_counter() - t0
+        
+        # 8. Debugging
+        if DEBUG_MODE and debug_state is not None:
+            debug_state.frame_counter += 1
+            if debug_state.frame_counter == DEBUG_FRAME:
+                _generate_debug_output(
+                    frame, fps, debug_state,
+                    palette_hex, palette_labs, hsv_ranges, base_hsvs,
+                    overlay_coords,
+                    raw_patches, center_patches, processed_patches, masks,
+                    classifications, reps, sticker_diags,
+                    stable_labels, square_stable, diagnostics,
+                    temporal_debug, timings
+                )
+    finally:
+        if debug_ctx is not None:
+            debug_ctx.__exit__(None, None, None)
+        if debug_f is not None:
+            debug_f.close()
 
     return {
         "status": "stable" if face_stable else "detecting",
@@ -1059,11 +1313,11 @@ def scan_single_face(
 
         for i, c_patch in enumerate(center_patches):
             r, c = i // 3, i % 3
-            bgr_cleaned, mask, _ = preprocess_patch(c_patch, config)
-            rep = representative_color(bgr_cleaned, mask)
+            bgr_cleaned, hsv_cleaned, mask, _ = preprocess_patch(c_patch, config)
+            rep = representative_color(bgr_cleaned, hsv_cleaned, mask)
             
             cls = classify_patch_hsv(
-                bgr_cleaned, mask,
+                bgr_cleaned, hsv_cleaned, mask,
                 hsv_ranges, white_face,
                 palette_labs, config
             )
@@ -1125,8 +1379,8 @@ async def scan_cube_from_images(
 
     for f in face_order:
         centre_patch = face_patches[f][4]
-        bgr_cleaned, mask, _ = preprocess_patch(centre_patch, config)
-        rep = representative_color(bgr_cleaned, mask)
+        bgr_cleaned, hsv_cleaned, mask, _ = preprocess_patch(centre_patch, config)
+        rep = representative_color(bgr_cleaned, hsv_cleaned, mask)
         centre_labs[f] = rep["lab"]
 
         bgr_int = rep["bgr"].astype(int)
@@ -1152,9 +1406,9 @@ async def scan_cube_from_images(
                 confs[row][col] = 1.0
                 continue
 
-            bgr_cleaned, mask, _ = preprocess_patch(patch, config)
+            bgr_cleaned, hsv_cleaned, mask, _ = preprocess_patch(patch, config)
             cls = classify_patch_hsv(
-                bgr_cleaned, mask,
+                bgr_cleaned, hsv_cleaned, mask,
                 hsv_ranges, white_face,
                 centre_labs, config
             )

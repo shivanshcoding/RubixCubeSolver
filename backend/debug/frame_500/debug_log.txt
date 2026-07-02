@@ -1,0 +1,1857 @@
+
+======================================================================
+PATCH 1 PREPROCESSING
+======================================================================
+
+------------------------------------
+VALIDITY MASK ANALYSIS
+------------------------------------
+Total Pixels : 1156
+Removed by Low Value Filter : 0
+Removed by Saturation Filter : 0
+Removed by Glare Filter : 0
+Pixels Remaining : 1156
+Validity Percentage : 100.0%
+
+------------------------------------
+PIXEL FLOW
+------------------------------------
+Original Pixels : 1156
+  ↓
+After Value Filter : 1156
+  ↓
+After Saturation Filter : 1156
+  ↓
+After Glare Filter : 1156
+  ↓
+Final Valid Pixels : 1156
+
+
+======================================================================
+PATCH 1
+======================================================================
+
+Representative Colour
+---------------------
+Median BGR : (210, 91, 35)
+Median HSV : (110, 213, 210)
+Minimum HSV : (110, 205, 205)
+Maximum HSV : (111, 220, 215)
+Median LAB : (41, 27, -66)
+
+Hue Histogram (Valid Pixels)
+----------------------------
+110 - 120 : 1156 pixels
+
+------------------------------------------
+WHITE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 0–179
+S : 0–40
+V : 215–255
+
+Hue PASS
+Saturation FAIL
+Value FAIL
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+
+White Neutral Check
+a = 0.0
+b = 0.0
+PASS
+------------------------------------------
+YELLOW
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 12–48
+S : 65–255
+V : 116–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+GREEN
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 55–91
+S : 87–255
+V : 99–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+BLUE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 96–132
+S : 96–255
+V : 127–255
+
+Hue PASS
+Saturation PASS
+Value PASS
+Overall PASS
+
+Pixels after inRange : 1156
+Pixels after OR : 1156
+Pixels after Morph OPEN : 1156
+Pixels after Morph CLOSE : 1156
+Pixels after Validity Mask : 1156
+Final Pixel Count : 1156
+------------------------------------------
+RED
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 0–15
+S : 135–255
+V : 120–255
+
+Range 2
+H : 165–179
+S : 135–255
+V : 120–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+ORANGE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 3–33
+S : 100–255
+V : 109–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+
+------------------------------------------
+FINAL PIXEL COUNTS
+------------------------------------------
+WHITE : 0
+YELLOW : 0
+GREEN : 0
+BLUE : 1156
+RED : 0
+ORANGE : 0
+
+Winner : BLUE
+Runner Up : WHITE
+Confidence : 1.00
+Reason : Dominant HSV mask.
+
+LAB DISTANCES
+WHITE : 91.9
+YELLOW : 158.0
+GREEN : 143.4
+BLUE : 28.3
+RED : 139.2
+ORANGE : 135.6
+
+======================================================================
+PATCH 2 PREPROCESSING
+======================================================================
+
+------------------------------------
+VALIDITY MASK ANALYSIS
+------------------------------------
+Total Pixels : 1156
+Removed by Low Value Filter : 0
+Removed by Saturation Filter : 0
+Removed by Glare Filter : 1156
+Pixels Remaining : 0
+Validity Percentage : 0.0%
+
+------------------------------------
+PIXEL FLOW
+------------------------------------
+Original Pixels : 1156
+  ↓
+After Value Filter : 1156
+  ↓
+After Saturation Filter : 1156
+  ↓
+After Glare Filter : 0
+  ↓
+Final Valid Pixels : 0
+
+
+======================================================================
+PATCH 2
+======================================================================
+
+Representative Colour
+---------------------
+No valid pixels after masking.
+
+Hue Histogram (Valid Pixels)
+----------------------------
+No valid pixels to histogram.
+
+No valid pixels remained after preprocessing. Classification failed.
+
+======================================================================
+PATCH 3 PREPROCESSING
+======================================================================
+
+------------------------------------
+VALIDITY MASK ANALYSIS
+------------------------------------
+Total Pixels : 1156
+Removed by Low Value Filter : 0
+Removed by Saturation Filter : 0
+Removed by Glare Filter : 0
+Pixels Remaining : 1156
+Validity Percentage : 100.0%
+
+------------------------------------
+PIXEL FLOW
+------------------------------------
+Original Pixels : 1156
+  ↓
+After Value Filter : 1156
+  ↓
+After Saturation Filter : 1156
+  ↓
+After Glare Filter : 1156
+  ↓
+Final Valid Pixels : 1156
+
+
+======================================================================
+PATCH 3
+======================================================================
+
+Representative Colour
+---------------------
+Median BGR : (141, 209, 220)
+Median HSV : (26, 92, 220)
+Minimum HSV : (24, 77, 216)
+Maximum HSV : (29, 97, 223)
+Median LAB : (83, -6, 35)
+
+Hue Histogram (Valid Pixels)
+----------------------------
+ 20 - 30  : 1156 pixels
+
+------------------------------------------
+WHITE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 0–179
+S : 0–40
+V : 215–255
+
+Hue PASS
+Saturation FAIL
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+
+White Neutral Check
+a = 0.0
+b = 0.0
+PASS
+------------------------------------------
+YELLOW
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 12–48
+S : 65–255
+V : 116–255
+
+Hue PASS
+Saturation PASS
+Value PASS
+Overall PASS
+
+Pixels after inRange : 1156
+Pixels after OR : 1156
+Pixels after Morph OPEN : 1156
+Pixels after Morph CLOSE : 1156
+Pixels after Validity Mask : 1156
+Final Pixel Count : 1156
+------------------------------------------
+GREEN
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 55–91
+S : 87–255
+V : 99–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+BLUE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 96–132
+S : 96–255
+V : 127–255
+
+Hue FAIL
+Saturation FAIL
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+RED
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 0–15
+S : 135–255
+V : 120–255
+
+Range 2
+H : 165–179
+S : 135–255
+V : 120–255
+
+Hue FAIL
+Saturation FAIL
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+ORANGE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 3–33
+S : 100–255
+V : 109–255
+
+Hue PASS
+Saturation FAIL
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+
+------------------------------------------
+FINAL PIXEL COUNTS
+------------------------------------------
+WHITE : 0
+YELLOW : 1156
+GREEN : 0
+BLUE : 0
+RED : 0
+ORANGE : 0
+
+Winner : YELLOW
+Runner Up : WHITE
+Confidence : 1.00
+Reason : Dominant HSV mask.
+
+LAB DISTANCES
+WHITE : 39.1
+YELLOW : 44.6
+GREEN : 59.4
+BLUE : 138.3
+RED : 93.1
+ORANGE : 45.9
+
+======================================================================
+PATCH 4 PREPROCESSING
+======================================================================
+
+------------------------------------
+VALIDITY MASK ANALYSIS
+------------------------------------
+Total Pixels : 1156
+Removed by Low Value Filter : 0
+Removed by Saturation Filter : 0
+Removed by Glare Filter : 0
+Pixels Remaining : 1156
+Validity Percentage : 100.0%
+
+------------------------------------
+PIXEL FLOW
+------------------------------------
+Original Pixels : 1156
+  ↓
+After Value Filter : 1156
+  ↓
+After Saturation Filter : 1156
+  ↓
+After Glare Filter : 1156
+  ↓
+Final Valid Pixels : 1156
+
+
+======================================================================
+PATCH 4
+======================================================================
+
+Representative Colour
+---------------------
+Median BGR : (91, 120, 41)
+Median HSV : (79, 169, 120)
+Minimum HSV : (77, 159, 116)
+Maximum HSV : (81, 177, 124)
+Median LAB : (45, -32, 9)
+
+Hue Histogram (Valid Pixels)
+----------------------------
+ 70 - 80  : 949 pixels
+ 80 - 90  : 207 pixels
+
+------------------------------------------
+WHITE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 0–179
+S : 0–40
+V : 215–255
+
+Hue PASS
+Saturation FAIL
+Value FAIL
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+
+White Neutral Check
+a = 0.0
+b = 0.0
+PASS
+------------------------------------------
+YELLOW
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 12–48
+S : 65–255
+V : 116–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+GREEN
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 55–91
+S : 87–255
+V : 99–255
+
+Hue PASS
+Saturation PASS
+Value PASS
+Overall PASS
+
+Pixels after inRange : 1156
+Pixels after OR : 1156
+Pixels after Morph OPEN : 1156
+Pixels after Morph CLOSE : 1156
+Pixels after Validity Mask : 1156
+Final Pixel Count : 1156
+------------------------------------------
+BLUE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 96–132
+S : 96–255
+V : 127–255
+
+Hue FAIL
+Saturation PASS
+Value FAIL
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+RED
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 0–15
+S : 135–255
+V : 120–255
+
+Range 2
+H : 165–179
+S : 135–255
+V : 120–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+ORANGE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 3–33
+S : 100–255
+V : 109–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+
+------------------------------------------
+FINAL PIXEL COUNTS
+------------------------------------------
+WHITE : 0
+YELLOW : 0
+GREEN : 1156
+BLUE : 0
+RED : 0
+ORANGE : 0
+
+Winner : GREEN
+Runner Up : WHITE
+Confidence : 1.00
+Reason : Dominant HSV mask.
+
+LAB DISTANCES
+WHITE : 64.2
+YELLOW : 83.1
+GREEN : 54.7
+BLUE : 123.6
+RED : 121.3
+ORANGE : 83.1
+
+======================================================================
+PATCH 5 PREPROCESSING
+======================================================================
+
+------------------------------------
+VALIDITY MASK ANALYSIS
+------------------------------------
+Total Pixels : 1156
+Removed by Low Value Filter : 0
+Removed by Saturation Filter : 0
+Removed by Glare Filter : 0
+Pixels Remaining : 1156
+Validity Percentage : 100.0%
+
+------------------------------------
+PIXEL FLOW
+------------------------------------
+Original Pixels : 1156
+  ↓
+After Value Filter : 1156
+  ↓
+After Saturation Filter : 1156
+  ↓
+After Glare Filter : 1156
+  ↓
+Final Valid Pixels : 1156
+
+
+======================================================================
+PATCH 5
+======================================================================
+
+Representative Colour
+---------------------
+Median BGR : (76, 56, 191)
+Median HSV : (176, 180, 191)
+Minimum HSV : (174, 172, 185)
+Maximum HSV : (177, 188, 197)
+Median LAB : (45, 55, 20)
+
+Hue Histogram (Valid Pixels)
+----------------------------
+170 - 180 : 1156 pixels
+
+------------------------------------------
+WHITE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 0–179
+S : 0–40
+V : 215–255
+
+Hue PASS
+Saturation FAIL
+Value FAIL
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+
+White Neutral Check
+a = 0.0
+b = 0.0
+PASS
+------------------------------------------
+YELLOW
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 12–48
+S : 65–255
+V : 116–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+GREEN
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 55–91
+S : 87–255
+V : 99–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+BLUE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 96–132
+S : 96–255
+V : 127–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+RED
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 0–15
+S : 135–255
+V : 120–255
+
+Range 2
+H : 165–179
+S : 135–255
+V : 120–255
+
+Hue PASS
+Saturation PASS
+Value PASS
+Overall PASS
+
+Pixels after inRange : 1156
+Pixels after OR : 1156
+Pixels after Morph OPEN : 1156
+Pixels after Morph CLOSE : 1156
+Pixels after Validity Mask : 1156
+Final Pixel Count : 1156
+------------------------------------------
+ORANGE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 3–33
+S : 100–255
+V : 109–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+
+------------------------------------------
+FINAL PIXEL COUNTS
+------------------------------------------
+WHITE : 0
+YELLOW : 0
+GREEN : 0
+BLUE : 0
+RED : 1156
+ORANGE : 0
+
+Winner : RED
+Runner Up : WHITE
+Confidence : 1.00
+Reason : Dominant HSV mask.
+
+LAB DISTANCES
+WHITE : 80.2
+YELLOW : 104.1
+GREEN : 125.6
+BLUE : 106.3
+RED : 49.0
+ORANGE : 61.2
+
+======================================================================
+PATCH 6 PREPROCESSING
+======================================================================
+
+------------------------------------
+VALIDITY MASK ANALYSIS
+------------------------------------
+Total Pixels : 1156
+Removed by Low Value Filter : 0
+Removed by Saturation Filter : 0
+Removed by Glare Filter : 0
+Pixels Remaining : 1156
+Validity Percentage : 100.0%
+
+------------------------------------
+PIXEL FLOW
+------------------------------------
+Original Pixels : 1156
+  ↓
+After Value Filter : 1156
+  ↓
+After Saturation Filter : 1156
+  ↓
+After Glare Filter : 1156
+  ↓
+Final Valid Pixels : 1156
+
+
+======================================================================
+PATCH 6
+======================================================================
+
+Representative Colour
+---------------------
+Median BGR : (204, 93, 38)
+Median HSV : (110, 207, 204)
+Minimum HSV : (109, 187, 198)
+Maximum HSV : (111, 217, 211)
+Median LAB : (42, 23, -63)
+
+Hue Histogram (Valid Pixels)
+----------------------------
+100 - 110 : 8 pixels
+110 - 120 : 1148 pixels
+
+------------------------------------------
+WHITE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 0–179
+S : 0–40
+V : 215–255
+
+Hue PASS
+Saturation FAIL
+Value FAIL
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+
+White Neutral Check
+a = 0.0
+b = 0.0
+PASS
+------------------------------------------
+YELLOW
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 12–48
+S : 65–255
+V : 116–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+GREEN
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 55–91
+S : 87–255
+V : 99–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+BLUE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 96–132
+S : 96–255
+V : 127–255
+
+Hue PASS
+Saturation PASS
+Value PASS
+Overall PASS
+
+Pixels after inRange : 1156
+Pixels after OR : 1156
+Pixels after Morph OPEN : 1156
+Pixels after Morph CLOSE : 1156
+Pixels after Validity Mask : 1156
+Final Pixel Count : 1156
+------------------------------------------
+RED
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 0–15
+S : 135–255
+V : 120–255
+
+Range 2
+H : 165–179
+S : 135–255
+V : 120–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+ORANGE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 3–33
+S : 100–255
+V : 109–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+
+------------------------------------------
+FINAL PIXEL COUNTS
+------------------------------------------
+WHITE : 0
+YELLOW : 0
+GREEN : 0
+BLUE : 1156
+RED : 0
+ORANGE : 0
+
+Winner : BLUE
+Runner Up : WHITE
+Confidence : 1.00
+Reason : Dominant HSV mask.
+
+LAB DISTANCES
+WHITE : 88.4
+YELLOW : 154.0
+GREEN : 138.5
+BLUE : 33.2
+RED : 137.8
+ORANGE : 132.5
+
+======================================================================
+PATCH 7 PREPROCESSING
+======================================================================
+
+------------------------------------
+VALIDITY MASK ANALYSIS
+------------------------------------
+Total Pixels : 1156
+Removed by Low Value Filter : 0
+Removed by Saturation Filter : 0
+Removed by Glare Filter : 0
+Pixels Remaining : 1156
+Validity Percentage : 100.0%
+
+------------------------------------
+PIXEL FLOW
+------------------------------------
+Original Pixels : 1156
+  ↓
+After Value Filter : 1156
+  ↓
+After Saturation Filter : 1156
+  ↓
+After Glare Filter : 1156
+  ↓
+Final Valid Pixels : 1156
+
+
+======================================================================
+PATCH 7
+======================================================================
+
+Representative Colour
+---------------------
+Median BGR : (72, 81, 219)
+Median HSV : (2, 172, 219)
+Minimum HSV : (1, 164, 212)
+Maximum HSV : (3, 177, 223)
+Median LAB : (53, 53, 34)
+
+Hue Histogram (Valid Pixels)
+----------------------------
+  0 - 10  : 1156 pixels
+
+------------------------------------------
+WHITE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 0–179
+S : 0–40
+V : 215–255
+
+Hue PASS
+Saturation FAIL
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+
+White Neutral Check
+a = 0.0
+b = 0.0
+PASS
+------------------------------------------
+YELLOW
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 12–48
+S : 65–255
+V : 116–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+GREEN
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 55–91
+S : 87–255
+V : 99–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+BLUE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 96–132
+S : 96–255
+V : 127–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+RED
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 0–15
+S : 135–255
+V : 120–255
+
+Range 2
+H : 165–179
+S : 135–255
+V : 120–255
+
+Hue PASS
+Saturation PASS
+Value PASS
+Overall PASS
+
+Pixels after inRange : 0
+Pixels after OR : 1156
+Pixels after Morph OPEN : 1156
+Pixels after Morph CLOSE : 1156
+Pixels after Validity Mask : 1156
+Final Pixel Count : 1156
+------------------------------------------
+ORANGE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 3–33
+S : 100–255
+V : 109–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 9
+Pixels after OR : 9
+Pixels after Morph OPEN : 8
+Pixels after Morph CLOSE : 8
+Pixels after Validity Mask : 8
+Final Pixel Count : 8
+
+------------------------------------------
+FINAL PIXEL COUNTS
+------------------------------------------
+WHITE : 0
+YELLOW : 0
+GREEN : 0
+BLUE : 0
+RED : 1156
+ORANGE : 8
+
+Winner : RED
+Runner Up : ORANGE
+Confidence : 0.99
+Reason : Dominant HSV mask.
+
+LAB DISTANCES
+WHITE : 78.4
+YELLOW : 91.9
+GREEN : 120.5
+BLUE : 120.6
+RED : 37.9
+ORANGE : 46.9
+
+======================================================================
+PATCH 8 PREPROCESSING
+======================================================================
+
+------------------------------------
+VALIDITY MASK ANALYSIS
+------------------------------------
+Total Pixels : 1156
+Removed by Low Value Filter : 0
+Removed by Saturation Filter : 0
+Removed by Glare Filter : 0
+Pixels Remaining : 1156
+Validity Percentage : 100.0%
+
+------------------------------------
+PIXEL FLOW
+------------------------------------
+Original Pixels : 1156
+  ↓
+After Value Filter : 1156
+  ↓
+After Saturation Filter : 1156
+  ↓
+After Glare Filter : 1156
+  ↓
+Final Valid Pixels : 1156
+
+
+======================================================================
+PATCH 8
+======================================================================
+
+Representative Colour
+---------------------
+Median BGR : (59, 45, 186)
+Median HSV : (177, 193, 186)
+Minimum HSV : (175, 178, 180)
+Maximum HSV : (178, 202, 195)
+Median LAB : (42, 56, 27)
+
+Hue Histogram (Valid Pixels)
+----------------------------
+170 - 180 : 1156 pixels
+
+------------------------------------------
+WHITE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 0–179
+S : 0–40
+V : 215–255
+
+Hue PASS
+Saturation FAIL
+Value FAIL
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+
+White Neutral Check
+a = 0.0
+b = 0.0
+PASS
+------------------------------------------
+YELLOW
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 12–48
+S : 65–255
+V : 116–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+GREEN
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 55–91
+S : 87–255
+V : 99–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+BLUE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 96–132
+S : 96–255
+V : 127–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+RED
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 0–15
+S : 135–255
+V : 120–255
+
+Range 2
+H : 165–179
+S : 135–255
+V : 120–255
+
+Hue PASS
+Saturation PASS
+Value PASS
+Overall PASS
+
+Pixels after inRange : 1156
+Pixels after OR : 1156
+Pixels after Morph OPEN : 1156
+Pixels after Morph CLOSE : 1156
+Pixels after Validity Mask : 1156
+Final Pixel Count : 1156
+------------------------------------------
+ORANGE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 3–33
+S : 100–255
+V : 109–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+
+------------------------------------------
+FINAL PIXEL COUNTS
+------------------------------------------
+WHITE : 0
+YELLOW : 0
+GREEN : 0
+BLUE : 0
+RED : 1156
+ORANGE : 0
+
+Winner : RED
+Runner Up : WHITE
+Confidence : 1.00
+Reason : Dominant HSV mask.
+
+LAB DISTANCES
+WHITE : 84.8
+YELLOW : 102.4
+GREEN : 126.5
+BLUE : 113.4
+RED : 42.8
+ORANGE : 57.8
+
+======================================================================
+PATCH 9 PREPROCESSING
+======================================================================
+
+------------------------------------
+VALIDITY MASK ANALYSIS
+------------------------------------
+Total Pixels : 1156
+Removed by Low Value Filter : 0
+Removed by Saturation Filter : 0
+Removed by Glare Filter : 0
+Pixels Remaining : 1156
+Validity Percentage : 100.0%
+
+------------------------------------
+PIXEL FLOW
+------------------------------------
+Original Pixels : 1156
+  ↓
+After Value Filter : 1156
+  ↓
+After Saturation Filter : 1156
+  ↓
+After Glare Filter : 1156
+  ↓
+Final Valid Pixels : 1156
+
+
+======================================================================
+PATCH 9
+======================================================================
+
+Representative Colour
+---------------------
+Median BGR : (203, 86, 37)
+Median HSV : (111, 209, 203)
+Minimum HSV : (110, 165, 192)
+Maximum HSV : (112, 219, 213)
+Median LAB : (40, 27, -65)
+
+Hue Histogram (Valid Pixels)
+----------------------------
+110 - 120 : 1156 pixels
+
+------------------------------------------
+WHITE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 0–179
+S : 0–40
+V : 215–255
+
+Hue PASS
+Saturation FAIL
+Value FAIL
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+
+White Neutral Check
+a = 0.0
+b = 0.0
+PASS
+------------------------------------------
+YELLOW
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 12–48
+S : 65–255
+V : 116–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+GREEN
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 55–91
+S : 87–255
+V : 99–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+BLUE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 96–132
+S : 96–255
+V : 127–255
+
+Hue PASS
+Saturation PASS
+Value PASS
+Overall PASS
+
+Pixels after inRange : 1156
+Pixels after OR : 1156
+Pixels after Morph OPEN : 1156
+Pixels after Morph CLOSE : 1156
+Pixels after Validity Mask : 1156
+Final Pixel Count : 1156
+------------------------------------------
+RED
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 0–15
+S : 135–255
+V : 120–255
+
+Range 2
+H : 165–179
+S : 135–255
+V : 120–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+------------------------------------------
+ORANGE
+------------------------------------------
+
+Generated HSV Range(s)
+
+Range 1
+H : 3–33
+S : 100–255
+V : 109–255
+
+Hue FAIL
+Saturation PASS
+Value PASS
+Overall FAIL
+
+Pixels after inRange : 0
+Pixels after OR : 0
+Pixels after Morph OPEN : 0
+Pixels after Morph CLOSE : 0
+Pixels after Validity Mask : 0
+Final Pixel Count : 0
+
+------------------------------------------
+FINAL PIXEL COUNTS
+------------------------------------------
+WHITE : 0
+YELLOW : 0
+GREEN : 0
+BLUE : 1156
+RED : 0
+ORANGE : 0
+
+Winner : BLUE
+Runner Up : WHITE
+Confidence : 1.00
+Reason : Dominant HSV mask.
+
+LAB DISTANCES
+WHITE : 92.2
+YELLOW : 157.6
+GREEN : 143.0
+BLUE : 29.1
+RED : 138.3
+ORANGE : 134.9
+══════════════════════════════════════════════
+CubeVision AI Debug
+Frame 500
+══════════════════════════════════════════════
+
+FRAME INFO
+- Frame Number : 500
+- FPS          : 37.0
+- Resolution   : 600 x 337
+- Timestamp    : 1782988831.52
+
+====================================
+USER PALETTE
+====================================
+U : #FFFFFF
+D : #ecec41
+F : #29db76
+B : #2650f7
+R : #f00000
+L : #e5931f
+
+====================================
+PALETTE CONVERSIONS
+====================================
+U
+HEX : #FFFFFF
+RGB : (255,255,255)
+BGR : (255,255,255)
+HSV : (0,0,255)
+LAB : (100,0,0)
+
+D
+HEX : #ecec41
+RGB : (236,236,65)
+BGR : (65,236,236)
+HSV : (30,185,236)
+LAB : (90,-19,77)
+
+F
+HEX : #29db76
+RGB : (41,219,118)
+BGR : (118,219,41)
+HSV : (73,207,219)
+LAB : (77,-65,38)
+
+B
+HEX : #2650f7
+RGB : (38,80,247)
+BGR : (247,80,38)
+HSV : (114,216,247)
+LAB : (42,47,-86)
+
+R
+HEX : #f00000
+RGB : (240,0,0)
+BGR : (0,0,240)
+HSV : (0,255,240)
+LAB : (50,76,64)
+
+L
+HEX : #e5931f
+RGB : (229,147,31)
+BGR : (31,147,229)
+HSV : (18,220,229)
+LAB : (67,23,67)
+
+====================================
+GENERATED HSV RANGES
+====================================
+WHITE
+Lower
+(0,0,215)
+Upper
+(179,40,255)
+
+YELLOW
+Lower
+(12,65,116)
+Upper
+(48,255,255)
+
+GREEN
+Lower
+(55,87,99)
+Upper
+(91,255,255)
+
+BLUE
+Lower
+(96,96,127)
+Upper
+(132,255,255)
+
+RED
+Lower
+(0,135,120)
+Upper
+(15,255,255)
+Lower
+(165,135,120)
+Upper
+(179,255,255)
+
+ORANGE
+Lower
+(3,100,109)
+Upper
+(33,255,255)
+
+====================================
+FINAL OUTPUT
+====================================
+Generated Face
+B U D
+F R B
+R R B
+
+Stable Squares
+Y Y Y
+Y Y Y
+Y Y Y
+
+====================================
+SUMMARY
+====================================
+Total Processing Time : 68.0 ms
+Crop Time             : 0.0 ms
+Preprocessing Time    : 66.2 ms
+Classification Time   : 0.0 ms
+Temporal Time         : 0.1 ms
+Diagnostics Time      : 1.7 ms
+
+
