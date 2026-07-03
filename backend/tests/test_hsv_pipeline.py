@@ -16,7 +16,7 @@ def test_generate_hsv_ranges():
     }
     
     labs = pipeline.convert_palette_to_lab(palette_hex)
-    ranges, white_face, base_hsvs = generate_hsv_ranges(palette_hex, labs, config)
+    ranges, white_face, base_hsvs, _ = generate_hsv_ranges(palette_hex, labs, config)
     
     assert white_face == "U"
     
@@ -45,7 +45,7 @@ def test_classify_patch_hsv_tie_break():
         "D": "#ffd500", "F": "#009e60", "B": "#0051ba"
     }
     labs = pipeline.convert_palette_to_lab(palette_hex)
-    ranges, white_face, base_hsvs = generate_hsv_ranges(palette_hex, labs, config)
+    ranges, white_face, base_hsvs, _ = generate_hsv_ranges(palette_hex, labs, config)
     
     red_h = int(base_hsvs["R"][0])
     orange_h = 15
