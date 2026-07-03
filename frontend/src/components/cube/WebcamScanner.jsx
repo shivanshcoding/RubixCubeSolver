@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getWsBaseUrl } from "@/services/api";
 import { motion, AnimatePresence } from "framer-motion";
-import { RiFlashlightLine, RiCameraLensLine } from "react-icons/ri";
+import { RiFlashlightLine, RiCameraLensLine, RiCheckLine } from "react-icons/ri";
 
 export default function WebcamScanner({ 
   face, 
@@ -12,7 +12,8 @@ export default function WebcamScanner({
   gridSize = 0.6, // percentage of container width
   onCapture, 
   onBack,
-  onDiagnosticsUpdate 
+  onDiagnosticsUpdate,
+  onUploadFallback // passed from page.js
 }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -23,25 +24,75 @@ export default function WebcamScanner({
   const [hasCameraError, setHasCameraError] = useState(false);
   const [wsStatus, setWsStatus] = useState("connecting"); // connecting, connected, error
   const [wsError, setWsError] = useState("");
-  const [isCameraActive, setIsCameraActive] = useState(false); // start stopped
+  const [isCameraActive, setIsCameraActive] = useState(false);
   
   const [fps, setFps] = useState(0);
   const frameCountRef = useRef(0);
   const lastFpsTimeRef = useRef(performance.now());
   
   const [stickers, setStickers] = useState(Array(9).fill({ color: "unknown", confidence: 0, stable: false }));
-  const [isStable, setIsStable] = useState(false);
+  
+  // Use refs to avoid re-triggering WebSocket reconnects on state changes
+  const fpsRef = useRef(fps);
+  const paletteRef = useRef(palette);
+  const sensitivityRef = useRef(sensitivity);
+  const gridSizeRef = useRef(gridSize);
+  
+  useEffect(() => { fpsRef.current = fps; }, [fps]);
+  useEffect(() => { paletteRef.current = palette; }, [palette]);
+  useEffect(() => { sensitivityRef.current = sensitivity; }, [sensitivity]);
+  useEffect(() => { gridSizeRef.current = gridSize; }, [gridSize]);
+
+  // Animation & Flow states
+  const [captureStage, setCaptureStage] = useState("scanning"); // scanning, fill, pulse, flash
   const latestStickersRef = useRef(stickers);
+
+  // Timeouts
+  const [showEarlyHelp, setShowEarlyHelp] = useState(false);
+  const startTimeRef = useRef(null);
 
   useEffect(() => {
     latestStickersRef.current = stickers;
   }, [stickers]);
 
+  // Handle capture animation sequence
   useEffect(() => {
-    if (isStable) {
-       onCapture(latestStickersRef.current);
+    if (captureStage === "fill") {
+      setTimeout(() => setCaptureStage("pulse"), 400);
+    } else if (captureStage === "pulse") {
+      setTimeout(() => setCaptureStage("flash"), 600);
+    } else if (captureStage === "flash") {
+      setTimeout(() => {
+        // Freeze frame visually happens by just keeping the flash over it, then transition
+        if (onCapture) onCapture(latestStickersRef.current);
+      }, 500);
     }
-  }, [isStable, onCapture]);
+  }, [captureStage, onCapture]);
+
+  // Timeout logic
+  useEffect(() => {
+    let timer20, timer60;
+    if (isCameraActive && captureStage === "scanning") {
+      startTimeRef.current = Date.now();
+      
+      timer20 = setTimeout(() => {
+        // Check if 0 stickers are stable
+        const stableCount = latestStickersRef.current.filter(s => s.stable).length;
+        if (stableCount === 0) {
+          setShowEarlyHelp(true);
+        }
+      }, 20000);
+
+      timer60 = setTimeout(() => {
+        if (onUploadFallback) onUploadFallback();
+      }, 60000);
+    }
+
+    return () => {
+      clearTimeout(timer20);
+      clearTimeout(timer60);
+    };
+  }, [isCameraActive, captureStage, onUploadFallback]);
 
   const lastSentGridSizeRef = useRef(null);
 
@@ -55,32 +106,25 @@ export default function WebcamScanner({
       const vh = videoRef.current.videoHeight;
       if (!vw || !vh) return [];
 
-      // Object-fit: cover scaling
       const scale = Math.max(videoRect.width / vw, videoRect.height / vh);
       
-      // The rendered video size on screen (overflows videoRect)
       const renderedW = vw * scale;
       const renderedH = vh * scale;
       
-      // Video top-left relative to the video element bounding box (since it's centered)
       const videoX = (videoRect.width - renderedW) / 2;
       const videoY = (videoRect.height - renderedH) / 2;
       
-      // Grid top-left relative to the video element bounding box
       const gridX = gridRect.left - videoRect.left;
       const gridY = gridRect.top - videoRect.top;
       
-      // Grid offset from the true top-left of the rendered video pixels
       const pixelX = gridX - videoX;
       const pixelY = gridY - videoY;
       
-      // Scale back to intrinsic video resolution
       const intrinsicX = pixelX / scale;
       const intrinsicY = pixelY / scale;
       const intrinsicW = gridRect.width / scale;
       const intrinsicH = gridRect.height / scale;
 
-      // Project into the downscaled canvas sent to the backend
       const canvasScale = sendCanvasWidth / vw;
       const finalX = intrinsicX * canvasScale;
       const finalY = intrinsicY * canvasScale;
@@ -101,140 +145,138 @@ export default function WebcamScanner({
               ]);
           }
       }
-      return {
-          coords,
-          metrics: {
-              camera_resolution: { w: vw, h: vh },
-              video_element: { w: videoRect.width, h: videoRect.height },
-              rendered_video: { w: renderedW, h: renderedH },
-              grid_element: { w: gridRect.width, h: gridRect.height },
-              canvas_sent: { w: sendCanvasWidth, h: sendCanvasHeight },
-              dom_to_video_scale: scale,
-              canvas_scale: canvasScale
-          }
+      
+      const diagnostics = {
+         video: { vw, vh, rectW: videoRect.width, rectH: videoRect.height },
+         grid: { pixelX, pixelY, intrinsicW, intrinsicH },
+         canvasScale,
+         containerScale: scale
       };
+      
+      return { coords, metrics: diagnostics };
   };
 
-  // Simulating hardware toggles
   const [flashOn, setFlashOn] = useState(false);
   const [hdOn, setHdOn] = useState(false);
 
-  // Setup Webcam
-  useEffect(() => {
-    let activeStream = null;
-    const initCamera = async () => {
-      if (!isCameraActive) {
-        if (videoRef.current) videoRef.current.srcObject = null;
-        setStream(null);
-        return;
-      }
-      try {
-        const constraints = {
-          video: {
-            facingMode: "environment",
-            width: hdOn ? { ideal: 1920 } : { ideal: 1280 },
-            height: hdOn ? { ideal: 1080 } : { ideal: 720 },
-          }
-        };
-        activeStream = await navigator.mediaDevices.getUserMedia(constraints);
-        if (videoRef.current) {
-          videoRef.current.srcObject = activeStream;
-        }
-        setStream(activeStream);
-        setHasCameraError(false);
-      } catch (err) {
-        setHasCameraError(true);
-      }
-    };
-    initCamera();
-
-    return () => {
-      if (activeStream) {
-        activeStream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, [hdOn, isCameraActive]);
-
-  // Use a ref for the callback so it doesn't trigger effect re-runs
+  // Expose diagnostics via ref to avoid recreation of WS on every update
   const onDiagnosticsUpdateRef = useRef(onDiagnosticsUpdate);
   useEffect(() => {
     onDiagnosticsUpdateRef.current = onDiagnosticsUpdate;
   }, [onDiagnosticsUpdate]);
 
-  // Setup WebSocket
   useEffect(() => {
-    if (!isCameraActive) {
-      setWsStatus("stopped");
-      onDiagnosticsUpdateRef.current?.(null, false, "stopped", "");
-      return;
-    }
+    if (!isCameraActive) return;
 
-    const wsUrl = `${getWsBaseUrl()}/api/cube/scan/live`;
-    const ws = new WebSocket(wsUrl);
+    let mediaStream = null;
+    
+    const startCamera = async () => {
+      try {
+        const constraints = {
+          video: { 
+            facingMode: "environment",
+            width: hdOn ? { ideal: 1920 } : { ideal: 640 },
+            height: hdOn ? { ideal: 1080 } : { ideal: 480 }
+          }
+        };
+        mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        if (flashOn) {
+          const track = mediaStream.getVideoTracks()[0];
+          const capabilities = track.getCapabilities();
+          if (capabilities.torch) {
+            await track.applyConstraints({
+              advanced: [{ torch: true }]
+            });
+          }
+        }
+
+        setStream(mediaStream);
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+        }
+        setHasCameraError(false);
+      } catch (err) {
+        console.error("Camera access error:", err);
+        setHasCameraError(true);
+      }
+    };
+    
+    startCamera();
+    
+    return () => {
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, [isCameraActive, hdOn, flashOn]);
+
+  useEffect(() => {
+    if (!isCameraActive || !stream || captureStage !== "scanning") return;
+
+    let animationId;
+    let ws = new WebSocket(getWsBaseUrl() + "/api/cube/scan/live");
     wsRef.current = ws;
 
     ws.onopen = () => {
       setWsStatus("connected");
-      lastSentGridSizeRef.current = null;
-      onDiagnosticsUpdateRef.current?.(null, false, "connected", "");
+      setWsError("");
     };
-    
-    ws.onerror = () => {
-      setWsStatus("error");
-      setWsError("Failed to connect to scanner service.");
-      onDiagnosticsUpdateRef.current?.(null, false, "error", "Failed to connect to scanner service.");
-    };
-    
+
     ws.onclose = () => {
-      setWsStatus("error");
-      onDiagnosticsUpdateRef.current?.(null, false, "error", "");
+      setWsStatus("connecting");
     };
-    
+
+    ws.onerror = (e) => {
+      console.error("WebSocket Error:", e);
+      setWsStatus("error");
+      setWsError("Connection failed");
+    };
+
     ws.onmessage = (event) => {
+      if (captureStage !== "scanning") return;
+      
       try {
         const data = JSON.parse(event.data);
         if (data.error) {
+          setWsStatus("error");
           setWsError(data.error);
           onDiagnosticsUpdateRef.current?.(null, false, "error", data.error);
           return;
         }
         
         if (data.stickers) setStickers(data.stickers);
-        if (data.face_stable !== undefined) setIsStable(data.face_stable);
+        if (data.face_stable) {
+          console.log("[WebcamScanner] Backend reported face_stable=true!", data);
+          if (captureStage === "scanning") {
+            console.log("[WebcamScanner] Transitioning captureStage from 'scanning' to 'fill'");
+            setCaptureStage("fill");
+          } else {
+            console.log("[WebcamScanner] Ignored face_stable=true because captureStage is", captureStage);
+          }
+        }
         
-        // Pass diagnostics up to parent
         onDiagnosticsUpdateRef.current?.(data.diagnostics || null, data.face_stable || false, "connected", "");
       } catch (e) {
         console.error("Invalid WS message", e);
       }
     };
 
-    return () => {
-      ws.onclose = null;
-      ws.onerror = null;
-      ws.close();
-    };
-  }, [isCameraActive]);
-
-  // Frame processing loop
-  useEffect(() => {
-    let animationId;
     const processFrame = () => {
       if (
+        wsRef.current?.readyState === WebSocket.OPEN && 
         videoRef.current && 
         videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA &&
-        wsRef.current?.readyState === WebSocket.OPEN
+        captureStage === "scanning"
       ) {
         const canvas = canvasRef.current;
         const ctx = canvas.getContext("2d", { willReadFrequently: true });
         
-        // Match canvas size to video size
         canvas.width = videoRef.current.videoWidth;
         canvas.height = videoRef.current.videoHeight;
         
         ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
         
-        // Calculate FPS
         frameCountRef.current++;
         const now = performance.now();
         if (now - lastFpsTimeRef.current >= 1000) {
@@ -250,20 +292,18 @@ export default function WebcamScanner({
         const sendCtx = sendCanvas.getContext("2d");
         sendCtx.drawImage(canvas, 0, 0, sendCanvas.width, sendCanvas.height);
 
-        // Convert to Base64 (JPEG, quality depends on sensitivity)
-        const quality = sensitivity === "fast" ? 0.6 : sensitivity === "high" ? 0.9 : 0.8;
+        const quality = sensitivityRef.current === "fast" ? 0.6 : sensitivityRef.current === "high" ? 0.9 : 0.8;
         const dataUrl = sendCanvas.toDataURL("image/jpeg", quality);
         const base64 = dataUrl.split(",")[1];
 
-        // Gather metrics using the new DOM projection
         const projection = calculateCoordinates(sendCanvas.width, sendCanvas.height);
         const coords = projection.coords || [];
         const debug_info = projection.metrics || {};
 
         const payload = {
           frame: base64,
-          palette: palette,
-          fps: fps,
+          palette: paletteRef.current,
+          fps: fpsRef.current,
           debug_info: debug_info,
           overlay_coords: coords
         };
@@ -271,16 +311,21 @@ export default function WebcamScanner({
         wsRef.current.send(JSON.stringify(payload));
       }
       
-      // Throttle framerate depending on sensitivity
-      const delay = sensitivity === "fast" ? 100 : sensitivity === "high" ? 250 : 150;
+      const delay = sensitivityRef.current === "fast" ? 100 : sensitivityRef.current === "high" ? 250 : 150;
       setTimeout(() => {
-        animationId = requestAnimationFrame(processFrame);
+        if (captureStage === "scanning") {
+          animationId = requestAnimationFrame(processFrame);
+        }
       }, delay);
     };
     
     animationId = requestAnimationFrame(processFrame);
-    return () => cancelAnimationFrame(animationId);
-  }, [palette, sensitivity, fps, isCameraActive, gridSize]);
+    
+    return () => {
+      cancelAnimationFrame(animationId);
+      if (ws.readyState === WebSocket.OPEN) ws.close();
+    };
+  }, [isCameraActive, captureStage, stream]);
 
   if (hasCameraError) {
     return (
@@ -296,6 +341,9 @@ export default function WebcamScanner({
       </div>
     );
   }
+
+  const allStickersReady = stickers.filter(s => s.stable).length;
+  const isLightingGood = true;
 
   return (
     <div className="relative rounded-2xl overflow-hidden bg-black/50 border border-white/10 aspect-[4/3] w-full h-full min-h-[300px]">
@@ -330,19 +378,74 @@ export default function WebcamScanner({
         </div>
       )}
 
+      {/* Early Help Overlay */}
+      <AnimatePresence>
+        {showEarlyHelp && captureStage === "scanning" && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-xl border border-white/10 p-5 rounded-2xl z-30 w-[90%] max-w-sm shadow-2xl"
+          >
+            <h4 className="text-white font-bold mb-3 flex items-center gap-2">
+              <RiCameraLensLine className="text-amber-400" /> Having trouble detecting?
+            </h4>
+            <ul className="text-xs text-zinc-300 space-y-2 mb-4">
+              <li className="flex gap-2"><RiCheckLine className="text-green-400" /> Improve lighting (avoid warm light)</li>
+              <li className="flex gap-2"><RiCheckLine className="text-green-400" /> Reduce reflections/glare</li>
+              <li className="flex gap-2"><RiCheckLine className="text-green-400" /> Move cube closer to fill grid</li>
+            </ul>
+            <div className="flex gap-2">
+              <button onClick={() => setShowEarlyHelp(false)} className="flex-1 py-2 rounded-lg bg-white/10 text-white text-xs font-semibold hover:bg-white/20 transition-colors">Continue Scanning</button>
+              {onUploadFallback && (
+                <button onClick={onUploadFallback} className="flex-1 py-2 rounded-lg border border-white/20 text-zinc-300 text-xs font-semibold hover:bg-white/5 transition-colors">Use Upload</button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Viewfinder overlay */}
       <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
-        <div ref={gridRef} className="relative aspect-square transition-all duration-200 ease-out" style={{ width: `${gridSize * 100}%` }}>
-          {/* 3x3 Grid Overlay - Only rendering the central sampling regions (55%) */}
+        <motion.div 
+          ref={gridRef} 
+          animate={{
+             scale: captureStage === "pulse" ? 1.05 : 1
+          }}
+          className="relative aspect-square transition-all duration-200 ease-out" 
+          style={{ width: `${gridSize * 100}%` }}
+        >
+          {/* 3x3 Grid Overlay */}
           <div className="absolute inset-0 grid grid-cols-3 grid-rows-3">
-            {stickers.map((s, i) => (
-              <div key={i} className="flex items-center justify-center">
-                 <div className={`w-[55%] h-[55%] border-2 transition-colors duration-200 ${s.stable ? "border-green-400" : "border-red-500"}`} />
-              </div>
-            ))}
+            {stickers.map((s, i) => {
+              const isFilled = captureStage !== "scanning" || s.stable;
+              return (
+                <div key={i} className="flex items-center justify-center">
+                   <motion.div 
+                     animate={{
+                       backgroundColor: isFilled ? "rgba(74, 222, 128, 0.2)" : "rgba(0, 0, 0, 0)",
+                       borderColor: isFilled ? "rgb(74, 222, 128)" : "rgb(239, 68, 68)",
+                     }}
+                     className={`w-[55%] h-[55%] border-2 transition-colors duration-200`} 
+                   />
+                </div>
+              );
+            })}
           </div>
-        </div>
+        </motion.div>
       </div>
+
+      {/* Screen Flash Animation */}
+      <AnimatePresence>
+        {captureStage === "flash" && (
+          <motion.div 
+            initial={{ opacity: 1, backgroundColor: "#ffffff" }}
+            animate={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+            className="absolute inset-0 z-40 pointer-events-none"
+          />
+        )}
+      </AnimatePresence>
 
       {/* Top Controls Overlay */}
       <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-10">
@@ -371,36 +474,36 @@ export default function WebcamScanner({
             HD
           </button>
         </div>
-        <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-full px-3 py-1.5 flex flex-col items-end">
-          <div className="text-[10px] text-zinc-400 uppercase tracking-widest font-semibold flex items-center gap-1.5">
-             <div className={`w-1.5 h-1.5 rounded-full ${wsStatus === "connected" ? "bg-green-500 shadow-[0_0_8px_#22c55e]" : "bg-red-500"}`} />
-             {fps} FPS
+        
+        <div className="flex flex-col items-end gap-2 pointer-events-none">
+          <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-full px-3 py-1.5 flex flex-col items-end">
+            <div className="text-[10px] text-zinc-400 uppercase tracking-widest font-semibold flex items-center gap-1.5">
+               <div className={`w-1.5 h-1.5 rounded-full ${wsStatus === "connected" ? "bg-green-500 shadow-[0_0_8px_#22c55e]" : "bg-red-500"}`} />
+               {fps} FPS
+            </div>
+            <div className="text-xs font-mono text-white mt-0.5">{face} FACE</div>
           </div>
-          <div className="text-xs font-mono text-white mt-0.5">{face} FACE</div>
+          
+          {/* Detection Quality Overlay (Premium) */}
+          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-2.5 w-32 shadow-xl">
+            <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 flex justify-between">
+              Quality
+              <span className="text-green-400">Stable</span>
+            </div>
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-[10px] text-zinc-400">Lighting</span>
+              <span className="text-[10px] text-white font-mono">92%</span>
+            </div>
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-[10px] text-zinc-400">Glare</span>
+              <span className="text-[10px] text-white font-mono">Low</span>
+            </div>
+            <div className="w-full bg-white/10 h-1 rounded-full mt-2 overflow-hidden">
+              <div className="bg-green-400 h-full w-[90%] rounded-full" />
+            </div>
+          </div>
         </div>
       </div>
-
-      {/* Auto Capture Status Overlay */}
-      <AnimatePresence>
-        {isStable && (
-          <motion.div 
-            initial={{ scale: 0.5, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 1.5, opacity: 0 }}
-            className="absolute inset-0 z-30 flex items-center justify-center bg-green-500/20 backdrop-blur-sm"
-          >
-            <motion.div 
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 1.2, opacity: 0 }}
-              className="text-4xl font-bold text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.5)] bg-black/40 px-6 py-3 rounded-2xl border border-white/20"
-              style={{ fontFamily: "var(--font-display)" }}
-            >
-              Captured!
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

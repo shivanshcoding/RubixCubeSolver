@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { toast } from "react-hot-toast";
+import { showPremiumToast } from "@/components/shared/PremiumToast";
 import dynamic from "next/dynamic";
 import {
   RiCameraLine,
@@ -107,12 +107,20 @@ export default function ScannerPage() {
   const handleColorConfirm = () => {
     setColorMapping(tempColors);
     setMode("SCANNING");
-    toast.success("Calibration complete!");
+    showPremiumToast({ title: "Calibration Complete", message: "Colors saved successfully.", type: "success" });
   };
 
   const handleCapture = (stickers) => {
-    setReviewStickers(stickers);
-    setMode("REVIEW");
+    const centerSticker = stickers[4];
+    const centerColor = typeof centerSticker === "object" ? centerSticker.color : centerSticker;
+    
+    if (centerColor && centerColor !== "unknown" && centerColor !== activeScanFace) {
+       setReviewStickers(stickers);
+       setMode("MISMATCH_PROMPT");
+    } else {
+       setReviewStickers(stickers);
+       setMode("REVIEW");
+    }
   };
 
   const handleAcceptFace = (stickers) => {
@@ -143,7 +151,7 @@ export default function ScannerPage() {
       const res = await validateCubeString(cubeString);
       if (res.valid) {
         setValidation(true);
-        toast.success("Cube is valid and ready to solve!");
+        showPremiumToast({ title: "Cube Validated", message: "Cube is valid and ready to solve!", type: "success" });
       } else {
         setValidation(false, [res.error || "Invalid cube configuration"]);
       }
@@ -154,7 +162,7 @@ export default function ScannerPage() {
 
   const handleSolve = async () => {
     if (!isValidated) {
-      toast.error("Cube state is invalid. Please correct it.");
+      showPremiumToast({ title: "Invalid Cube", message: "Cube state is invalid. Please correct it.", type: "error" });
       return;
     }
     
@@ -171,11 +179,11 @@ export default function ScannerPage() {
         setSolution(result);
         setIsSolveComplete(true);
       } else {
-        toast.error(result.error || "Solve failed");
+        showPremiumToast({ title: "Solve Failed", message: result.error || "Solve failed", type: "error" });
         setIsSolving(false);
       }
     } catch (err) {
-      toast.error("Failed to solve cube");
+      showPremiumToast({ title: "Solve Failed", message: "Failed to solve cube", type: "error" });
       setIsSolving(false);
     }
   };
@@ -335,6 +343,7 @@ export default function ScannerPage() {
                     gridSize={gridSize}
                     onCapture={handleCapture}
                     onBack={() => setMode("UPLOAD")}
+                    onUploadFallback={() => setMode("UPLOAD")}
                     onDiagnosticsUpdate={(diag, stable, status, err) => {
                        if (diag) setDiagnostics(diag);
                        setWsStatus(status);
@@ -353,13 +362,50 @@ export default function ScannerPage() {
                     />
                   </div>
                 )}
+                {mode === "MISMATCH_PROMPT" && (
+                  <div className="h-full bg-black/80 backdrop-blur-md border border-white/10 rounded-2xl flex items-center justify-center p-6 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-red-500/10 pointer-events-none" />
+                    <div className="relative z-10 flex flex-col items-center text-center max-w-sm">
+                      <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mb-4">
+                        <RiInformationLine className="w-8 h-8 text-red-400" />
+                      </div>
+                      <h3 className="text-xl font-bold text-white mb-2">Wrong Face Detected?</h3>
+                      <p className="text-sm text-zinc-300 mb-6">
+                        The detected center sticker is <strong className="text-white">{FACE_LABELS[typeof reviewStickers[4] === "object" ? reviewStickers[4].color : reviewStickers[4]]}</strong>. You are currently scanning the <strong className="text-white">{FACE_LABELS[activeScanFace]}</strong> face.
+                      </p>
+                      <div className="flex flex-col gap-3 w-full">
+                        <button 
+                          onClick={() => {
+                            setActiveScanFace(typeof reviewStickers[4] === "object" ? reviewStickers[4].color : reviewStickers[4]);
+                            setMode("REVIEW");
+                          }} 
+                          className="btn-primary py-3"
+                        >
+                          This is the {FACE_LABELS[typeof reviewStickers[4] === "object" ? reviewStickers[4].color : reviewStickers[4]]} face
+                        </button>
+                        <button 
+                          onClick={() => setMode("REVIEW")} 
+                          className="btn-secondary py-3 border-white/20 text-white"
+                        >
+                          Continue as {FACE_LABELS[activeScanFace]} face
+                        </button>
+                        <button 
+                          onClick={() => setMode("SCANNING")} 
+                          className="text-xs text-zinc-400 mt-2 hover:text-white"
+                        >
+                          Cancel and rescan
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {mode === "UPLOAD" && (
                   <UploadFallback 
                     face={activeScanFace}
                     palette={colorMapping}
                     onCapture={handleCapture}
                     onBack={() => setMode("SCANNING")}
-                    onManualEntry={() => toast.success("Click a square on the 2D Live Map to manually enter colors.", { icon: "👆" })}
+                    onManualEntry={() => showPremiumToast({ title: "Manual Entry", message: "Click a square on the 2D Live Map to manually enter colors.", type: "info" })}
                   />
                 )}
               </div>

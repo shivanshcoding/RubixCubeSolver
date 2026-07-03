@@ -23,7 +23,7 @@ from typing import Dict, List, Optional, Tuple
 # ═══════════════════════════════════════════════════════════════════
 
 DEBUG_MODE = True
-DEBUG_FRAME = 500
+DEBUG_INTERVAL_SECONDS = 3.0  # Dump debug every 5 seconds
 
 
 @dataclass
@@ -48,8 +48,7 @@ class PipelineConfig:
     median_blur_ksize: int = 3       # Lightweight blur, 0 to disable
 
     # ── Dynamic HSV Classification ───────────────────────────────
-    max_hue_tolerance: int = 45      # Failsafe cap if midpoint is too far
-    hsv_safety_gap_deg: float = 2.0  # Dead-zone between neighboring colors (360° scale)
+    hue_tolerance: int = 15          # Fixed hue tolerance around calibrated color
     saturation_tolerance: int = 120
     value_tolerance: int = 120
     white_saturation_offset: int = 40
@@ -116,11 +115,10 @@ def _palette_hash(palette_hex: Dict[str, str]) -> str:
     return hashlib.md5(canonical.encode()).hexdigest()
 
 
-def generate_hsv_ranges(palette_hex: Dict[str, str], palette_labs: Dict[str, np.ndarray], config: PipelineConfig) -> Tuple[Dict[str, List[Tuple[np.ndarray, np.ndarray]]], str, Dict[str, Tuple[int, int, int]], List[Dict]]:
-    """Generate dynamic HSV boundaries using midpoint separation, handling Hue wrap-around."""
+def generate_hsv_ranges(palette_hex: Dict[str, str], palette_labs: Dict[str, np.ndarray], config: PipelineConfig) -> Tuple[Dict[str, List[Tuple[np.ndarray, np.ndarray]]], str, Dict[str, Tuple[int, int, int]]]:
+    """Generate dynamic HSV boundaries using a fixed hue tolerance, handling Hue wrap-around."""
     ranges = {}
     base_hsvs = {}
-    overlaps = []
     
     # Identify the white face (closest to ideal white in LAB space)
     ideal_white_lab = np.array([100.0, 0.0, 0.0])
@@ -135,23 +133,13 @@ def generate_hsv_ranges(palette_hex: Dict[str, str], palette_labs: Dict[str, np.
         base_hsvs[face] = (h, s, v)
         
     non_white_faces = [f for f in base_hsvs if f != white_face]
-    red_face = min(non_white_faces, key=lambda f: min(base_hsvs[f][0], 180 - base_hsvs[f][0]))
-    
-    # Sort non-white faces by circular Hue (0-360)
-    sorted_faces = sorted(non_white_faces, key=lambda f: base_hsvs[f][0])
-    N = len(sorted_faces)
     
     face_names = {"U": "WHITE", "D": "YELLOW", "F": "GREEN", "B": "BLUE", "R": "RED", "L": "ORANGE"}
     
-    print("\n====================================")
-    print("CALIBRATION SUMMARY")
-    print("====================================")
-    
-    for face in sorted_faces:
+    for face in non_white_faces:
         h, s, v = base_hsvs[face]
-        print(f"Palette Hue: {face_names.get(face, face):6s} = {h * 2}°")
         
-    for i, face in enumerate(sorted_faces):
+    for face in non_white_faces:
         h, s, v = base_hsvs[face]
         
         s_min = max(0, s - config.saturation_tolerance)
@@ -159,100 +147,36 @@ def generate_hsv_ranges(palette_hex: Dict[str, str], palette_labs: Dict[str, np.
         v_min = max(0, v - config.value_tolerance)
         v_max = min(255, v + config.value_tolerance)
         
-        prev_face = sorted_faces[(i - 1) % N]
-        next_face = sorted_faces[(i + 1) % N]
+        # OpenCV hue is 0-179
+        h_min = (h - config.hue_tolerance) % 180
+        h_max = (h + config.hue_tolerance) % 180
         
-        H_curr = h * 2.0
-        H_prev = base_hsvs[prev_face][0] * 2.0
-        H_next = base_hsvs[next_face][0] * 2.0
-        
-        d_prev = (H_curr - H_prev) % 360
-        d_next = (H_next - H_curr) % 360
-        
-        max_tol = config.max_hue_tolerance * 2.0
-        
-        eff_d_prev = min(d_prev / 2.0, max_tol)
-        eff_d_next = min(d_next / 2.0, max_tol)
-        
-        start_360 = (H_curr - eff_d_prev + config.hsv_safety_gap_deg / 2.0) % 360
-        end_360 = (H_curr + eff_d_next - config.hsv_safety_gap_deg / 2.0) % 360
-        
-        width_360 = (end_360 - start_360) % 360
-        if width_360 > 180 or width_360 == 0:
-            start_360, end_360 = H_curr, H_curr
-            
-        h_min = int(start_360 / 2.0)
-        h_max = int(end_360 / 2.0)
-        
-        print(f"\n{face_names.get(face, face)} Midpoints: Prev={eff_d_prev:.1f}° Next={eff_d_next:.1f}°")
-        print(f"Safety Gap: {config.hsv_safety_gap_deg}° | Final Range: {h_min}-{h_max} (OpenCV scale)")
-        
-        is_red = (face == red_face)
+        # Wraparound occurs if h_min > h_max (e.g. h_min=170, h_max=10)
+        # Note: if hue_tolerance >= 90, it covers all hues. We assume it's small.
         if h_min > h_max:
-            if is_red:
-                lower1 = np.array([h_min, s_min, v_min], dtype=np.uint8)
-                upper1 = np.array([179, s_max, v_max], dtype=np.uint8)
-                lower2 = np.array([0, s_min, v_min], dtype=np.uint8)
-                upper2 = np.array([h_max, s_max, v_max], dtype=np.uint8)
-                ranges[face] = [(lower1, upper1), (lower2, upper2)]
-            else:
-                lower = np.array([0, s_min, v_min], dtype=np.uint8)
-                upper = np.array([h_max, s_max, v_max], dtype=np.uint8)
-                ranges[face] = [(lower, upper)]
+            # Wraparound case
+            lower1 = np.array([h_min, s_min, v_min], dtype=np.uint8)
+            upper1 = np.array([179, s_max, v_max], dtype=np.uint8)
+            lower2 = np.array([0, s_min, v_min], dtype=np.uint8)
+            upper2 = np.array([h_max, s_max, v_max], dtype=np.uint8)
+            ranges[face] = [(lower1, upper1), (lower2, upper2)]
         else:
             lower = np.array([h_min, s_min, v_min], dtype=np.uint8)
             upper = np.array([h_max, s_max, v_max], dtype=np.uint8)
             ranges[face] = [(lower, upper)]
             
-    h, s, v = base_hsvs[white_face]
-    s_max = min(255, s + config.white_saturation_offset)
-    v_min = max(0, v - config.white_value_offset)
-    ranges[white_face] = [(np.array([0, 0, v_min], dtype=np.uint8), np.array([179, s_max, 255], dtype=np.uint8))]
-
-    for face, face_ranges in ranges.items():
-        for (lower, upper) in face_ranges:
-            if lower[0] > upper[0] or lower[1] > upper[1] or lower[2] > upper[2]:
-                raise ValueError(f"Invalid HSV range generated for face {face}: {lower} -> {upper}")
-
-    faces = list(ranges.keys())
-    print("\nExpected Overlap Analysis:")
-    for i in range(len(faces)):
-        for j in range(i + 1, len(faces)):
-            f1, f2 = faces[i], faces[j]
-            if f1 == white_face or f2 == white_face:
-                continue
-                
-            for r1 in ranges[f1]:
-                for r2 in ranges[f2]:
-                    h1_min, h1_max = int(r1[0][0]), int(r1[1][0])
-                    h2_min, h2_max = int(r2[0][0]), int(r2[1][0])
-                    
-                    overlap_min = max(h1_min, h2_min)
-                    overlap_max = min(h1_max, h2_max)
-                    
-                    if overlap_min <= overlap_max:
-                        width_cv = overlap_max - overlap_min
-                        if width_cv > 0:
-                            width_deg = width_cv * 2
-                            range1_width = (h1_max - h1_min) * 2
-                            range2_width = (h2_max - h2_min) * 2
-                            max_width = max(range1_width, range2_width)
-                            overlap_percent = (width_deg / max_width) * 100 if max_width > 0 else 0
-                            
-                            n1, n2 = face_names.get(f1, f1), face_names.get(f2, f2)
-                            print(f"WARNING: {n1} overlaps {n2} | Width: {width_deg}° ({overlap_percent:.1f}%)")
-                            overlaps.append({
-                                "face1": f1, "face2": f2,
-                                "name1": n1, "name2": n2,
-                                "width_deg": width_deg,
-                                "percent": overlap_percent
-                            })
-
-    if not overlaps:
-        print("No overlaps detected.")
-        
-    print("====================================\n")
-    return ranges, white_face, base_hsvs, overlaps
+    # White uses very low saturation bounds, hue is irrelevant
+    w_h, w_s, w_v = base_hsvs[white_face]
+    w_s_min = 0
+    w_s_max = min(255, w_s + config.white_saturation_offset)
+    w_v_min = max(0, w_v - config.value_tolerance)
+    w_v_max = 255
+    ranges[white_face] = [(
+        np.array([0, w_s_min, w_v_min], dtype=np.uint8),
+        np.array([179, w_s_max, w_v_max], dtype=np.uint8)
+    )]
+    
+    return ranges, white_face, base_hsvs
 
 
 class PaletteCache:
@@ -271,7 +195,7 @@ class PaletteCache:
         h = _palette_hash(palette_hex)
         if h != self._hash:
             self._labs = convert_palette_to_lab(palette_hex)
-            self._hsv_ranges, self._white_face, self._base_hsvs, _ = generate_hsv_ranges(palette_hex, self._labs, self._config)
+            self._hsv_ranges, self._white_face, self._base_hsvs = generate_hsv_ranges(palette_hex, self._labs, self._config)
             self._hash = h
         return self._labs, self._hsv_ranges, self._white_face, self._base_hsvs
 
@@ -284,7 +208,7 @@ def validate_palette(
     palette: Dict[str, str],
     config: PipelineConfig = DEFAULT_CONFIG,
 ) -> Dict:
-    """Validate whether the six user-selected colours are suitable for CV."""
+    """Validate whether the six user-selected colours are suitable for CV before generating OpenCV bounds."""
     FACE_LABELS = {"U": "Up", "D": "Down", "F": "Front", "B": "Back", "R": "Right", "L": "Left"}
     face_names = {"U": "White", "D": "Yellow", "F": "Green", "B": "Blue", "R": "Red", "L": "Orange"}
 
@@ -306,7 +230,6 @@ def validate_palette(
 
     try:
         labs = convert_palette_to_lab(palette)
-        _, white_face, base_hsvs, overlaps = generate_hsv_ranges(palette, labs, config)
     except ValueError as e:
         return {
             "success": False, "status": "POOR", "score": 0,
@@ -315,28 +238,59 @@ def validate_palette(
             "distances": {}, "warnings": [str(e)],
         }
 
+    # Identify white face
+    ideal_white_lab = np.array([100.0, 0.0, 0.0])
+    white_face = min(labs, key=lambda f: delta_e_76(labs[f], ideal_white_lab))
+
+    base_hsvs = {}
+    for face, hex_code in palette.items():
+        r, g, b = hex_to_rgb(hex_code)
+        bgr_uint8 = np.array([[[b, g, r]]], dtype=np.uint8)
+        hsv_cv = cv2.cvtColor(bgr_uint8, cv2.COLOR_BGR2HSV)[0, 0]
+        base_hsvs[face] = (int(hsv_cv[0]), int(hsv_cv[1]), int(hsv_cv[2]))
+
     warnings = []
-    
-    # Check Saturation and Value
+    score = 100.0
+
+    # 1. White Neutrality Check
+    w_hex = palette[white_face]
+    w_r, w_g, w_b = hex_to_rgb(w_hex)
+    w_bgr = np.array([[[w_b, w_g, w_r]]], dtype=np.uint8)
+    w_lab = cv2.cvtColor(w_bgr, cv2.COLOR_BGR2LAB)[0, 0]
+    w_hsv = base_hsvs[white_face]
+    w_a, w_b_val = w_lab[1] - 128.0, w_lab[2] - 128.0
+    w_s = w_hsv[1]
+
+    if w_s > 35 or abs(w_a) > 15 or abs(w_b_val) > 15:
+        score -= 15
+        warnings.append("⚠ Selected white has noticeable colour tint. Detection may confuse white with other colours (e.g. yellow).")
+    else:
+        warnings.append("✓ White calibration is excellent.")
+
+    # 2. Saturation and Value checks
     for face, (h, s, v) in base_hsvs.items():
         if face == white_face:
             continue
         name = face_names.get(face, face)
         if s < 100:
-            warnings.append(f"{name} saturation is very low ({s}). Classification may be unreliable.")
+            score -= 10
+            warnings.append(f"⚠ {name} saturation is very low ({s}). Classification may become unreliable.")
         elif s < 130:
-            warnings.append(f"{name} saturation is low ({s}).")
+            score -= 5
+            warnings.append(f"⚠ {name} saturation is slightly low ({s}).")
             
-        if v < 100:
-            warnings.append(f"{name} brightness is very low ({v}). Classification may be unreliable.")
-        elif v < 130:
-            warnings.append(f"{name} brightness is low ({v}).")
+        if v < 70:
+            score -= 15
+            warnings.append(f"⚠ {name} brightness is extremely low ({v}), almost black/brown.")
+        elif v < 100:
+            score -= 10
+            warnings.append(f"⚠ {name} brightness is very low ({v}). Classification may be unreliable.")
 
+    # 3. LAB Distances
     distances = {}
     total_de = 0.0
     min_de = float('inf')
-    min_hue_sep = float('inf')
-    weakest_pair = ""
+    weakest_lab_pair = ""
     
     faces = list(palette.keys())
     pairs_count = 0
@@ -347,86 +301,92 @@ def validate_palette(
             total_de += de
             distances[f"{f1}-{f2}"] = de
             pairs_count += 1
-            
             if de < min_de:
                 min_de = de
-                weakest_pair = f"{face_names.get(f1, f1)} ↔ {face_names.get(f2, f2)}"
-                
-            if f1 != white_face and f2 != white_face:
-                h1 = base_hsvs[f1][0] * 2.0
-                h2 = base_hsvs[f2][0] * 2.0
-                hue_sep = min((h1 - h2) % 360, (h2 - h1) % 360)
-                if hue_sep < min_hue_sep:
-                    min_hue_sep = hue_sep
+                weakest_lab_pair = f"{face_names.get(f1, f1)} ↔ {face_names.get(f2, f2)}"
 
     avg_de = total_de / pairs_count if pairs_count > 0 else 0.0
 
-    score = 100.0
-    
-    # 1. Delta E Penalty
     if min_de < 30:
         score -= (30 - min_de) * 2.5
     if min_de < 20:
-        warnings.append(f"Colours in {weakest_pair} are extremely similar (ΔE={min_de:.1f}).")
+        warnings.append(f"⚠ Colours in {weakest_lab_pair} are extremely similar (ΔE={min_de:.1f}).")
     elif min_de < 30:
-        warnings.append(f"Colours in {weakest_pair} are quite similar (ΔE={min_de:.1f}).")
+        warnings.append(f"⚠ Colours in {weakest_lab_pair} are quite similar (ΔE={min_de:.1f}).")
 
-    # 2. Hue Separation Penalty
-    if min_hue_sep < 15:
-        score -= (15 - min_hue_sep) * 2
-    if min_hue_sep < 10:
-        warnings.append(f"Minimum hue separation is too small ({min_hue_sep:.1f}°).")
-
-    # 3. Overlap Penalty
+    # 4. Hue Separation & Theoretical Overlap
+    min_hue_sep = float('inf')
+    total_hue_sep = 0.0
+    hue_pairs = 0
+    weakest_hue_pair = ""
     max_overlap = 0.0
-    for ov in overlaps:
-        w = ov['width_deg']
-        if w > max_overlap:
-            max_overlap = w
-        if w > 8:
-            score -= 20
-            warnings.append(f"{ov['name1']} and {ov['name2']} overlap significantly ({w:.1f}°).")
-        elif w > 4:
-            score -= 10
-            warnings.append(f"{ov['name1']} and {ov['name2']} overlap moderately ({w:.1f}°).")
-        elif w > 0:
-            score -= 5
-            warnings.append(f"{ov['name1']} and {ov['name2']} overlap slightly ({w:.1f}°).")
+    
+    non_white_faces = [f for f in faces if f != white_face]
+    for i in range(len(non_white_faces)):
+        for j in range(i + 1, len(non_white_faces)):
+            f1, f2 = non_white_faces[i], non_white_faces[j]
+            h1 = base_hsvs[f1][0] * 2.0
+            h2 = base_hsvs[f2][0] * 2.0
+            
+            hue_dist = min((h1 - h2) % 360, (h2 - h1) % 360)
+            total_hue_sep += hue_dist
+            hue_pairs += 1
+            
+            n1, n2 = face_names.get(f1, f1), face_names.get(f2, f2)
+            
+            if hue_dist < min_hue_sep:
+                min_hue_sep = hue_dist
+                weakest_hue_pair = f"{n1} ↔ {n2}"
+                
+            # Theoretical Overlap (ideal boundary is ±18° representing max expected shift without clipping)
+            ideal_range_width = 36.0 # ±18°
+            # Two colours overlap if their distance is less than the combined half-widths (18+18 = 36)
+            overlap = ideal_range_width - hue_dist
+            if overlap > 0:
+                if overlap > max_overlap: max_overlap = overlap
+                score -= overlap * 1.5
+                if overlap > 10:
+                    warnings.append(f"⚠ {n1} and {n2} are only {hue_dist:.1f}° apart. Severe HSV overlap would occur without clipping. Classification unstable.")
+                else:
+                    warnings.append(f"⚠ {n1} and {n2} are only {hue_dist:.1f}° apart. HSV overlap would occur without clipping.")
 
-    # 4. Saturation/Value Penalty
-    for w in warnings:
-        if "very low" in w:
-            score -= 10
-        elif "low" in w:
-            score -= 5
+    avg_hue_sep = total_hue_sep / hue_pairs if hue_pairs > 0 else 0.0
 
     score = max(0.0, min(100.0, score))
     
     if score >= 85 and min_de >= 30 and max_overlap <= 4:
         status = "GOOD"
-        expected = "Excellent" if score >= 92 else "Good"
-    elif score >= 60 and min_de >= 20 and max_overlap <= 8:
+        expected = "High"
+    elif score >= 60 and min_de >= 20 and max_overlap <= 15:
         status = "ACCEPTABLE"
-        expected = "Fair"
+        expected = "Medium"
     else:
         status = "POOR"
-        expected = "Poor"
+        expected = "Low"
 
-    # Print Debug Summary
-    print("\n====================================")
-    print("CALIBRATION QUALITY")
-    print("====================================")
-    print(f"Score                  : {int(score)} / 100 ({status})")
-    print(f"Minimum ΔE             : {min_de:.1f}")
-    print(f"Minimum Hue Separation : {min_hue_sep:.1f}°")
-    print(f"Maximum Overlap        : {max_overlap:.1f}°")
-    print(f"Weakest Pair           : {weakest_pair}")
-    print(f"Expected Accuracy      : {expected}")
-    if warnings:
-        print("\nWarnings:")
-        for w in warnings:
-            print(f" - {w}")
-    print("====================================\n")
+    # Generate Color Metrics for UI Progress Bars
+    color_metrics = {}
+    for face, (h, s, v) in base_hsvs.items():
+        name = face_names.get(face, face)
+        if face == white_face:
+            # White quality drops if it has saturation or tint
+            w_hsv = base_hsvs[white_face]
+            w_s = w_hsv[1]
+            w_bgr = np.array([[[hex_to_rgb(palette[white_face])[2], hex_to_rgb(palette[white_face])[1], hex_to_rgb(palette[white_face])[0]]]], dtype=np.uint8)
+            w_lab = cv2.cvtColor(w_bgr, cv2.COLOR_BGR2LAB)[0, 0]
+            tint = max(abs(w_lab[1] - 128.0), abs(w_lab[2] - 128.0))
+            quality = max(0, min(100, 100 - int(w_s * 0.5) - int(tint * 2)))
+        else:
+            # Non-white quality drops if saturation or value is low
+            s_norm = s / 255.0
+            v_norm = v / 255.0
+            quality = int((s_norm * 0.6 + v_norm * 0.4) * 100)
+            
+        color_metrics[face] = {
+            "name": name,
+            "quality": quality,
+            "hsv": [int(h), int(s), int(v)]
+        }
 
     return {
         "success": status != "POOR",
@@ -437,8 +397,9 @@ def validate_palette(
         "average_distance": float(avg_de),
         "distances": {k: float(v) for k, v in distances.items()},
         "warnings": warnings,
-        "weakest_pair": weakest_pair,
-        "expected_accuracy": expected
+        "weakest_pair": weakest_lab_pair,
+        "expected_accuracy": expected,
+        "color_metrics": color_metrics
     }
 
 
@@ -601,16 +562,16 @@ def classify_patch_hsv(
             "classification_failed": True
         }
 
-    face_names = {"U": "WHITE", "D": "YELLOW", "F": "GREEN", "B": "BLUE", "R": "RED", "L": "ORANGE"}
+    face_names = {"U": "Up Colour", "D": "Down Colour", "F": "Front Colour", "B": "Back Colour", "R": "Right Colour", "L": "Left Colour"}
 
     patch_dir = os.path.join(debug_dir, f"patch_{patch_idx}") if is_debug_frame else ""
     if is_debug_frame and patch_dir:
         os.makedirs(patch_dir, exist_ok=True)
         if raw_patch is not None:
-            cv2.imwrite(os.path.join(debug_dir, f"patch_{patch_idx}_raw.jpg"), raw_patch)
+            cv2.imwrite(os.path.join(patch_dir, "raw.jpg"), raw_patch)
         if center_patch is not None:
-            cv2.imwrite(os.path.join(debug_dir, f"patch_{patch_idx}_center.jpg"), center_patch)
-        cv2.imwrite(os.path.join(debug_dir, f"patch_{patch_idx}_processed.jpg"), bgr_patch)
+            cv2.imwrite(os.path.join(patch_dir, "center.jpg"), center_patch)
+        cv2.imwrite(os.path.join(patch_dir, "processed.jpg"), bgr_patch)
         
     mask_imgs = {}
 
@@ -711,7 +672,6 @@ def classify_patch_hsv(
             mask_bgr = cv2.cvtColor(face_mask, cv2.COLOR_GRAY2BGR)
             cv2.putText(mask_bgr, name, (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
             mask_imgs[face] = mask_bgr
-            cv2.imwrite(os.path.join(patch_dir, f"{name.lower()}_mask.png"), face_mask)
 
     if is_debug_frame and mask_imgs:
         face_order = ["U", "D", "F", "B", "L", "R"]
@@ -719,66 +679,92 @@ def classify_patch_hsv(
         row1 = np.hstack(ordered_masks[0:3])
         row2 = np.hstack(ordered_masks[3:6])
         collage = np.vstack([row1, row2])
-        cv2.imwrite(os.path.join(debug_dir, f"patch_{patch_idx}_masks.jpg"), collage)
+        cv2.imwrite(os.path.join(debug_dir, f"patch_{patch_idx}/masks.jpg"), collage)
 
-    sorted_faces = sorted(pixel_counts.keys(), key=lambda f: pixel_counts[f], reverse=True)
-    winner = sorted_faces[0]
-    runner_up = sorted_faces[1]
+    sorted_faces = sorted(pixel_counts.items(), key=lambda x: x[1], reverse=True)
+    active_faces = [f for f, c in sorted_faces if c > 0]
     
-    winner_pixels = pixel_counts[winner]
-    runner_up_pixels = pixel_counts[runner_up]
+    if len(active_faces) == 0:
+        if is_debug_frame:
+            print("\nFinal Winner : unknown")
+            print("Reason : All HSV masks empty")
+        return {
+            "face": "unknown",
+            "runner_up": "unknown",
+            "confidence": 0.0,
+            "pixel_counts": pixel_counts,
+            "reason": "All masks empty"
+        }
+        
+    winner = sorted_faces[0][0]
+    winner_count = sorted_faces[0][1]
     
-    confidence = winner_pixels / (winner_pixels + runner_up_pixels + 1e-6)
-    reason = "Dominant HSV mask."
-    
+    reason = "Dominant HSV mask (no overlaps)."
+    confidence = 1.0
     tie_detected = False
-    if winner_pixels > 0 and (winner_pixels == runner_up_pixels or ((winner_pixels - runner_up_pixels) / winner_pixels < 0.05)):
+    
+    if len(active_faces) >= 2:
+        runner_up = sorted_faces[1][0]
+        runner_up_count = sorted_faces[1][1]
+        
+        # Use LAB tie-break since multiple masks matched
         tie_detected = True
+        reason = "LAB tie-break (overlapping masks)."
         
-    d_winner = 0.0
-    d_runner = 0.0
-    d_hue_w = 0.0
-    d_hue_r = 0.0
-    
-    orig_winner = winner
-    orig_runner = runner_up
-    
-    if winner_pixels < config.min_valid_pixels or tie_detected:
-        # We need LAB for fallback or tie breaking. Compute it on-the-fly.
-        bgr_med = rep["bgr"]
-        bgr_uint8 = np.array([[[int(bgr_med[0]), int(bgr_med[1]), int(bgr_med[2])]]], dtype=np.uint8)
+        d_min = float('inf')
+        d_runner = float('inf')
+        
+        best_face = winner
+        best_runner = runner_up
+        
+        # Convert rep to LAB and find closest among active faces
+        bgr_uint8 = np.array([[[int(rep['bgr'][0]), int(rep['bgr'][1]), int(rep['bgr'][2])]]], dtype=np.uint8)
         lab_cv = cv2.cvtColor(bgr_uint8, cv2.COLOR_BGR2LAB)[0, 0]
-        lab_float = np.array([lab_cv[0] * (100.0 / 255.0), lab_cv[1] - 128.0, lab_cv[2] - 128.0], dtype=np.float64)
+        patch_lab = np.array([lab_cv[0] * (100.0/255.0), lab_cv[1] - 128.0, lab_cv[2] - 128.0])
         
-        dists = {f: delta_e_76(lab_float, ref) for f, ref in palette_labs.items()}
-        sorted_lab = sorted(dists, key=dists.get)
-
-        if winner_pixels < config.min_valid_pixels:
-            winner = sorted_lab[0]
-            runner_up = sorted_lab[1]
-            reason = "HSV masks failed. LAB Fallback used."
-            confidence = 0.5
-            tie_detected = False
-        else:
-            reason = "LAB Tie Break"
-            d_winner = dists[orig_winner]
-            d_runner = dists[orig_runner]
+        for face in active_faces:
+            d = delta_e_76(patch_lab, palette_labs[face])
+            if d < d_min:
+                d_runner = d_min
+                best_runner = best_face
+                d_min = d
+                best_face = face
+            elif d < d_runner:
+                d_runner = d
+                best_runner = face
+                
+        orig_winner = winner
+        orig_runner = runner_up
+        
+        winner = best_face
+        runner_up = best_runner
+        
+        confidence = max(0.0, 1.0 - (d_min / max(d_runner, 1e-5)))
+        
+        d_hue_w = 0.0
+        d_hue_r = 0.0
+        
+        if abs(d_min - d_runner) < 3.0:
+            # Hue fallback
+            w_base = base_hsvs[winner]
+            r_base = base_hsvs[runner_up]
             
-            if abs(d_winner - d_runner) < 3.0:
-                reason = "Hue Tie Break"
-                patch_hue = rep["hsv"][0] * 2
-                w_calib_hue = base_hsvs[orig_winner][0] * 2
-                r_calib_hue = base_hsvs[orig_runner][0] * 2
+            def hue_dist(h1, h2):
+                dh = abs(h1 - h2)
+                return min(dh, 180 - dh)
                 
-                d_hue_w = min(abs(patch_hue - w_calib_hue), 360 - abs(patch_hue - w_calib_hue))
-                d_hue_r = min(abs(patch_hue - r_calib_hue), 360 - abs(patch_hue - r_calib_hue))
-                
-                if d_hue_r < d_hue_w:
-                    winner, runner_up = orig_runner, orig_winner
-            else:
-                if d_runner < d_winner:
-                    winner, runner_up = orig_runner, orig_winner
-                
+            d_hue_w = hue_dist(h, w_base[0])
+            d_hue_r = hue_dist(h, r_base[0])
+            
+            if d_hue_r < d_hue_w:
+                winner, runner_up = runner_up, winner
+                confidence = 0.51
+                reason = "LAB was tied. Hue distance broke the tie."
+    else:
+        runner_up = "unknown"
+        orig_winner = winner
+        orig_runner = runner_up
+        
     if is_debug_frame:
         print("\n------------------------------------------")
         print("FINAL PIXEL COUNTS")
@@ -787,33 +773,29 @@ def classify_patch_hsv(
             if f in pixel_counts:
                 print(f"{face_names.get(f, f)} : {pixel_counts[f]}")
             
-        print(f"\nTop Two")
-        print(f"Winner : {face_names.get(orig_winner, orig_winner)}")
-        print(f"Runner : {face_names.get(orig_runner, orig_runner)}")
-        print(f"Tie ? {'YES' if tie_detected else 'NO'}")
+        print(f"\nTie ? {'YES' if tie_detected else 'NO'}")
         
         if tie_detected:
-            print(f"\nLAB")
-            print(f"{face_names.get(orig_winner, orig_winner)} : {d_winner:.1f}")
-            print(f"{face_names.get(orig_runner, orig_runner)} : {d_runner:.1f}")
+            print(f"\nLAB Tie-Break Invoked")
+            print(f"Winner by pixels: {face_names.get(orig_winner, orig_winner)} ({winner_count})")
+            print(f"Runner up by pixels: {face_names.get(orig_runner, orig_runner)} ({runner_up_count})")
+            print("\nLAB Distance")
+            print(f"{face_names.get(winner, winner)} : {d_min:.1f}")
+            print(f"{face_names.get(runner_up, runner_up)} : {d_runner:.1f}")
             
-            if abs(d_winner - d_runner) < 3.0:
+            if abs(d_min - d_runner) < 3.0:
                 print(f"\nHue Distance")
-                print(f"{face_names.get(orig_winner, orig_winner)} : {d_hue_w:.1f}°")
-                print(f"{face_names.get(orig_runner, orig_runner)} : {d_hue_r:.1f}°")
+                print(f"{face_names.get(winner, winner)} : {d_hue_w:.1f} (OpenCV scale)")
+                print(f"{face_names.get(runner_up, runner_up)} : {d_hue_r:.1f} (OpenCV scale)")
                 
-            print(f"\nFinal Winner : {face_names.get(winner, winner)}")
-            print(f"Reason : {reason}")
-        else:
-            print(f"\nFinal Winner : {face_names.get(winner, winner)}")
-            print(f"Reason : {reason}")
+        print(f"\nFinal Winner : {face_names.get(winner, winner)}")
+        print(f"Reason : {reason}")
 
     return {
         "face": winner,
         "runner_up": runner_up,
         "confidence": min(1.0, confidence),
         "pixel_counts": pixel_counts,
-        "face_masks": face_masks,
         "reason": reason
     }
 
@@ -906,6 +888,8 @@ class TemporalSmoother:
             })
 
         face_stable = all(stable_flags)
+        if face_stable:
+            print("[TemporalSmoother] => face_stable is TRUE (all 9 stickers stable)")
         return face_stable, stable_flags, stable_labels, debug_info
 
     def reset(self) -> None:
@@ -1142,12 +1126,14 @@ def process_patches(
     is_debug_frame = False
     debug_dir = ""
     if DEBUG_MODE and debug_state is not None:
-        if debug_state.frame_counter + 1 == DEBUG_FRAME:
+        current_time = time.time()
+        if current_time - debug_state.last_debug_time > DEBUG_INTERVAL_SECONDS:
             is_debug_frame = True
-            debug_dir = f"debug/frame_{DEBUG_FRAME}"
+            debug_state.last_debug_time = current_time
+            debug_dir = f"debug/frame_{debug_state.frame_counter}"
             os.makedirs(debug_dir, exist_ok=True)
-            cv2.imwrite(os.path.join(debug_dir, "frame.jpg"), frame)
-            cv2.imwrite(os.path.join(debug_dir, "overlay.jpg"), overlay_coords_overlay(frame, overlay_coords, unblurred_center_patches))
+            cv2.imwrite(os.path.join(debug_dir, "original_frame.jpg"), frame)
+            cv2.imwrite(os.path.join(debug_dir, "cv_overlay.jpg"), overlay_coords_overlay(frame, overlay_coords, unblurred_center_patches))
 
     debug_f = None
     debug_ctx = None
@@ -1169,8 +1155,6 @@ def process_patches(
             if is_debug_frame and debug_dir:
                 patch_dir = os.path.join(debug_dir, f"patch_{i+1}")
                 os.makedirs(patch_dir, exist_ok=True)
-                cv2.imwrite(os.path.join(patch_dir, f"patch_{i+1}_original.jpg"), unblurred_center_patches[i])
-                cv2.imwrite(os.path.join(patch_dir, f"patch_{i+1}_hsv.jpg"), hsv_cleaned)
             masks.append(mask)
             
             # 4. Representative Colour (Median BGR of valid pixels)
@@ -1185,13 +1169,14 @@ def process_patches(
                 patch_idx=i+1,
                 is_debug_frame=is_debug_frame,
                 debug_dir=debug_dir,
-                raw_patch=raw_patches[i],
-                center_patch=center_patches[i]
+                raw_patch=raw_bgr_unblurred[i],
+                center_patch=bgr_cleaned
             )
             classifications.append(cls)
             
             # 6. Diagnostics
-            diag = _sticker_diagnostics(raw_patches[i], bgr_cleaned, mask, rep, cls, prep_stats)
+            prep_stats = {"note": "N/A"}
+            diag = _sticker_diagnostics(raw_bgr_unblurred[i], bgr_cleaned, mask, rep, cls, prep_stats)
             sticker_diags.append(diag)
         timings["PreprocessingAndClassification"] = time.perf_counter() - t0
 
@@ -1215,18 +1200,50 @@ def process_patches(
         timings["Diagnostics"] = time.perf_counter() - t0
         
         # 8. Debugging
-        if DEBUG_MODE and debug_state is not None:
+        if is_debug_frame:
+            # Diagnostics
+            with open(os.path.join(debug_dir, "diagnostics.json"), "w") as f:
+                json.dump(diagnostics, f, indent=2)
+                
+            # Calibration JSON
+            calibration_data = {
+                "user_palette": palette_hex,
+                "hsv_ranges": {f: [[int(x) for x in lower], [int(x) for x in upper]] for f, ranges in hsv_ranges.items() for lower, upper in ranges},
+                "base_hsvs": base_hsvs
+            }
+            with open(os.path.join(debug_dir, "calibration.json"), "w") as f:
+                json.dump(calibration_data, f, indent=2)
+                
+            # Classification JSON
+            with open(os.path.join(debug_dir, "classification.json"), "w") as f:
+                json.dump(classifications, f, indent=2)
+                
+            # Grid Summary Image
+            if len(unblurred_center_patches) == 9:
+                grid_rows = []
+                for r in range(3):
+                    row_patches = []
+                    for c in range(3):
+                        idx = r * 3 + c
+                        patch = unblurred_center_patches[idx].copy()
+                        label = stable_labels[idx] if square_stable[idx] else classifications[idx]["face"]
+                        cv2.putText(patch, label, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+                        row_patches.append(patch)
+                    grid_rows.append(cv2.hconcat(row_patches))
+                grid_img = cv2.vconcat(grid_rows)
+                cv2.imwrite(os.path.join(debug_dir, "grid_summary.jpg"), grid_img)
+                
+            _generate_debug_output(
+                frame, fps, debug_state,
+                palette_hex, palette_labs, hsv_ranges, base_hsvs,
+                overlay_coords,
+                raw_bgr_unblurred, unblurred_center_patches, processed_patches, masks,
+                classifications, reps, sticker_diags,
+                stable_labels, square_stable, diagnostics,
+                temporal_debug, timings
+            )
+        if debug_state is not None:
             debug_state.frame_counter += 1
-            if debug_state.frame_counter == DEBUG_FRAME:
-                _generate_debug_output(
-                    frame, fps, debug_state,
-                    palette_hex, palette_labs, hsv_ranges, base_hsvs,
-                    overlay_coords,
-                    raw_patches, center_patches, processed_patches, masks,
-                    classifications, reps, sticker_diags,
-                    stable_labels, square_stable, diagnostics,
-                    temporal_debug, timings
-                )
     finally:
         if debug_ctx is not None:
             debug_ctx.__exit__(None, None, None)
@@ -1253,7 +1270,7 @@ def scan_single_face(
 
     if palette_hex:
         palette_labs = convert_palette_to_lab(palette_hex)
-        hsv_ranges, white_face, base_hsvs, _ = generate_hsv_ranges(palette_hex, palette_labs, config)
+        hsv_ranges, white_face, base_hsvs = generate_hsv_ranges(palette_hex, palette_labs, config)
 
         stickers = []
         grid = [["" for _ in range(3)] for _ in range(3)]
@@ -1455,7 +1472,7 @@ async def scan_cube_from_images(
         palette_display.append({"face": f, "color": hex_color, "label": f"{f} Face (Calibrated)"})
 
     # Generate dynamic HSV ranges for the uploaded images' palette
-    hsv_ranges, white_face, _, _ = generate_hsv_ranges(palette_hex, centre_labs, config)
+    hsv_ranges, white_face, _ = generate_hsv_ranges(palette_hex, centre_labs, config)
 
     face_grids: Dict[str, List[List[str]]] = {}
     face_confs: Dict[str, List[List[float]]] = {}
