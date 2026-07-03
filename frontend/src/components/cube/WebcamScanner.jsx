@@ -44,7 +44,9 @@ export default function WebcamScanner({
   useEffect(() => { gridSizeRef.current = gridSize; }, [gridSize]);
 
   // Animation & Flow states
-  const [captureStage, setCaptureStage] = useState("scanning"); // scanning, fill, pulse, flash
+  const [backendStatus, setBackendStatus] = useState("detecting"); // detecting, buffering
+  const [bufferRemaining, setBufferRemaining] = useState(0);
+  const [bufferProgress, setBufferProgress] = useState(0);
   const latestStickersRef = useRef(stickers);
 
   // Timeouts
@@ -55,24 +57,15 @@ export default function WebcamScanner({
     latestStickersRef.current = stickers;
   }, [stickers]);
 
-  // Handle capture animation sequence
+  const onCaptureRef = useRef(onCapture);
   useEffect(() => {
-    if (captureStage === "fill") {
-      setTimeout(() => setCaptureStage("pulse"), 400);
-    } else if (captureStage === "pulse") {
-      setTimeout(() => setCaptureStage("flash"), 600);
-    } else if (captureStage === "flash") {
-      setTimeout(() => {
-        // Freeze frame visually happens by just keeping the flash over it, then transition
-        if (onCapture) onCapture(latestStickersRef.current);
-      }, 500);
-    }
-  }, [captureStage, onCapture]);
+    onCaptureRef.current = onCapture;
+  }, [onCapture]);
 
-  // Timeout logic
+// Timeout logic
   useEffect(() => {
     let timer20, timer60;
-    if (isCameraActive && captureStage === "scanning") {
+    if (isCameraActive && backendStatus === "detecting") {
       startTimeRef.current = Date.now();
       
       timer20 = setTimeout(() => {
@@ -92,7 +85,7 @@ export default function WebcamScanner({
       clearTimeout(timer20);
       clearTimeout(timer60);
     };
-  }, [isCameraActive, captureStage, onUploadFallback]);
+  }, [isCameraActive, backendStatus, onUploadFallback]);
 
   const lastSentGridSizeRef = useRef(null);
 
@@ -212,7 +205,7 @@ export default function WebcamScanner({
   }, [isCameraActive, hdOn, flashOn]);
 
   useEffect(() => {
-    if (!isCameraActive || !stream || captureStage !== "scanning") return;
+    if (!isCameraActive || !stream) return;
 
     let animationId;
     let ws = new WebSocket(getWsBaseUrl() + "/api/cube/scan/live");
@@ -234,8 +227,6 @@ export default function WebcamScanner({
     };
 
     ws.onmessage = (event) => {
-      if (captureStage !== "scanning") return;
-      
       try {
         const data = JSON.parse(event.data);
         if (data.error) {
@@ -244,30 +235,60 @@ export default function WebcamScanner({
           onDiagnosticsUpdateRef.current?.(null, false, "error", data.error);
           return;
         }
+
+        console.log("FULL WS DATA", data);
+        console.log(data.error);
+        console.log(data.trace);
+
+        if (data.stickers) {
+            console.table(
+                data.stickers.map((s, i) => ({
+                    idx: i,
+                    stable: s.stable,
+                    confidence: s.confidence,
+                    purity: s.purity,
+                    runner_ratio: s.runner_ratio,
+                    lab_margin: s.lab_margin,
+                    label: s.label
+                }))
+            );
+        }
+                
+        console.log(`[WS] Received payload - status: ${data.status}`);
         
-        if (data.stickers) setStickers(data.stickers);
-        if (data.face_stable) {
-          console.log("[WebcamScanner] Backend reported face_stable=true!", data);
-          if (captureStage === "scanning") {
-            console.log("[WebcamScanner] Transitioning captureStage from 'scanning' to 'fill'");
-            setCaptureStage("fill");
-          } else {
-            console.log("[WebcamScanner] Ignored face_stable=true because captureStage is", captureStage);
+        if (data.status === "buffering") {
+           console.log(`[WS] Remaining: ${data.seconds_remaining} sec`);
+        }
+        
+        if (data.stickers) {
+          setStickers(data.stickers);
+          console.log("[WS] Updated sticker state");
+          
+          if (data.stickers.every(s => s.stable)) {
+            console.log("[WS] All squares stable");
           }
         }
+        
+        if (data.status === "captured") {
+          console.log("[WS] Status is captured. Calling onCapture()");
+          if (onCaptureRef.current) onCaptureRef.current(data.stickers);
+          return;
+        }
+        
+        setBackendStatus(data.status || "detecting");
+        setBufferRemaining(data.seconds_remaining || 0);
+        setBufferProgress(data.progress || 0);
         
         onDiagnosticsUpdateRef.current?.(data.diagnostics || null, data.face_stable || false, "connected", "");
       } catch (e) {
         console.error("Invalid WS message", e);
       }
     };
-
-    const processFrame = () => {
+const processFrame = () => {
       if (
         wsRef.current?.readyState === WebSocket.OPEN && 
         videoRef.current && 
-        videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA &&
-        captureStage === "scanning"
+        videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA
       ) {
         const canvas = canvasRef.current;
         const ctx = canvas.getContext("2d", { willReadFrequently: true });
@@ -313,7 +334,7 @@ export default function WebcamScanner({
       
       const delay = sensitivityRef.current === "fast" ? 100 : sensitivityRef.current === "high" ? 250 : 150;
       setTimeout(() => {
-        if (captureStage === "scanning") {
+        if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
           animationId = requestAnimationFrame(processFrame);
         }
       }, delay);
@@ -325,7 +346,7 @@ export default function WebcamScanner({
       cancelAnimationFrame(animationId);
       if (ws.readyState === WebSocket.OPEN) ws.close();
     };
-  }, [isCameraActive, captureStage, stream]);
+  }, [isCameraActive, stream]);
 
   if (hasCameraError) {
     return (
@@ -380,7 +401,7 @@ export default function WebcamScanner({
 
       {/* Early Help Overlay */}
       <AnimatePresence>
-        {showEarlyHelp && captureStage === "scanning" && (
+        {showEarlyHelp && backendStatus === "detecting" && (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -410,7 +431,7 @@ export default function WebcamScanner({
         <motion.div 
           ref={gridRef} 
           animate={{
-             scale: captureStage === "pulse" ? 1.05 : 1
+             scale: 1
           }}
           className="relative aspect-square transition-all duration-200 ease-out" 
           style={{ width: `${gridSize * 100}%` }}
@@ -418,7 +439,7 @@ export default function WebcamScanner({
           {/* 3x3 Grid Overlay */}
           <div className="absolute inset-0 grid grid-cols-3 grid-rows-3">
             {stickers.map((s, i) => {
-              const isFilled = captureStage !== "scanning" || s.stable;
+              const isFilled = s.stable;
               return (
                 <div key={i} className="flex items-center justify-center">
                    <motion.div 
@@ -435,17 +456,37 @@ export default function WebcamScanner({
         </motion.div>
       </div>
 
-      {/* Screen Flash Animation */}
-      <AnimatePresence>
-        {captureStage === "flash" && (
-          <motion.div 
-            initial={{ opacity: 1, backgroundColor: "#ffffff" }}
-            animate={{ opacity: 0 }}
-            transition={{ duration: 0.5 }}
-            className="absolute inset-0 z-40 pointer-events-none"
-          />
-        )}
-      </AnimatePresence>
+        {/* Buffering Overlay */}
+        <AnimatePresence>
+          {backendStatus === "buffering" && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="absolute inset-x-0 bottom-32 mx-auto w-64 z-20 flex flex-col items-center gap-2"
+            >
+              <div className="bg-black/80 backdrop-blur-md rounded-xl p-4 border border-green-500/30 text-center w-full shadow-2xl">
+                <div className="flex items-center justify-center gap-2 text-green-400 font-bold mb-1">
+                  <RiCheckLine size={20} />
+                  <span>Face Locked</span>
+                </div>
+                <p className="text-zinc-300 text-sm mb-3">Hold still...</p>
+                
+                {/* Progress Bar */}
+                <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
+                  <motion.div 
+                    className="h-full bg-green-500"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${bufferProgress * 100}%` }}
+                    transition={{ ease: "linear", duration: 0.1 }}
+                  />
+                </div>
+                
+                <p className="text-xs font-mono text-zinc-500 mt-2">{bufferRemaining}s</p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
       {/* Top Controls Overlay */}
       <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-10">
@@ -480,26 +521,6 @@ export default function WebcamScanner({
             <div className="text-[10px] text-zinc-400 uppercase tracking-widest font-semibold flex items-center gap-1.5">
                <div className={`w-1.5 h-1.5 rounded-full ${wsStatus === "connected" ? "bg-green-500 shadow-[0_0_8px_#22c55e]" : "bg-red-500"}`} />
                {fps} FPS
-            </div>
-            <div className="text-xs font-mono text-white mt-0.5">{face} FACE</div>
-          </div>
-          
-          {/* Detection Quality Overlay (Premium) */}
-          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-2.5 w-32 shadow-xl">
-            <div className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5 flex justify-between">
-              Quality
-              <span className="text-green-400">Stable</span>
-            </div>
-            <div className="flex justify-between items-center mb-1">
-              <span className="text-[10px] text-zinc-400">Lighting</span>
-              <span className="text-[10px] text-white font-mono">92%</span>
-            </div>
-            <div className="flex justify-between items-center mb-1">
-              <span className="text-[10px] text-zinc-400">Glare</span>
-              <span className="text-[10px] text-white font-mono">Low</span>
-            </div>
-            <div className="w-full bg-white/10 h-1 rounded-full mt-2 overflow-hidden">
-              <div className="bg-green-400 h-full w-[90%] rounded-full" />
             </div>
           </div>
         </div>

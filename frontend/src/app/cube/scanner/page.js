@@ -112,9 +112,9 @@ export default function ScannerPage() {
 
   const handleCapture = (stickers) => {
     const centerSticker = stickers[4];
-    const centerColor = typeof centerSticker === "object" ? centerSticker.color : centerSticker;
+    const centerLabel = typeof centerSticker === "object" ? (centerSticker.label || centerSticker.color) : centerSticker;
     
-    if (centerColor && centerColor !== "unknown" && centerColor !== activeScanFace) {
+    if (centerLabel && centerLabel !== "unknown" && centerLabel !== activeScanFace) {
        setReviewStickers(stickers);
        setMode("MISMATCH_PROMPT");
     } else {
@@ -127,7 +127,7 @@ export default function ScannerPage() {
     stickers.forEach((s, i) => {
       const row = Math.floor(i / 3);
       const col = i % 3;
-      const faceVal = typeof s === "object" ? s.color : s;
+      const faceVal = typeof s === "object" ? (s.label || s.color) : s;
       setSticker(currentFace, row, col, faceVal);
     });
 
@@ -199,7 +199,9 @@ export default function ScannerPage() {
   const handleEditSticker = (index) => {
     const faceKeys = Object.keys(colorMapping);
     const newStickers = [...reviewStickers];
-    const currentVal = typeof newStickers[index] === "object" ? newStickers[index].color : newStickers[index];
+    const currentSticker = newStickers[index];
+    
+    const currentVal = typeof currentSticker === "object" ? (currentSticker.label || currentSticker.color) : currentSticker;
     
     let nextIdx = 0;
     if (currentVal !== "unknown") {
@@ -207,7 +209,15 @@ export default function ScannerPage() {
       if (foundIdx !== -1) nextIdx = (foundIdx + 1) % 6;
     }
     
-    newStickers[index] = faceKeys[nextIdx];
+    const nextLabel = faceKeys[nextIdx];
+    
+    newStickers[index] = {
+      label: nextLabel,
+      color: colorMapping[nextLabel] || nextLabel,
+      confidence: 1,
+      stable: true
+    };
+    
     setReviewStickers(newStickers);
   };
 
@@ -371,17 +381,17 @@ export default function ScannerPage() {
                       </div>
                       <h3 className="text-xl font-bold text-white mb-2">Wrong Face Detected?</h3>
                       <p className="text-sm text-zinc-300 mb-6">
-                        The detected center sticker is <strong className="text-white">{FACE_LABELS[typeof reviewStickers[4] === "object" ? reviewStickers[4].color : reviewStickers[4]]}</strong>. You are currently scanning the <strong className="text-white">{FACE_LABELS[activeScanFace]}</strong> face.
+                        The detected center sticker is <strong className="text-white">{FACE_LABELS[typeof reviewStickers[4] === "object" ? (reviewStickers[4].label || reviewStickers[4].color) : reviewStickers[4]]}</strong>. You are currently scanning the <strong className="text-white">{FACE_LABELS[activeScanFace]}</strong> face.
                       </p>
                       <div className="flex flex-col gap-3 w-full">
                         <button 
                           onClick={() => {
-                            setActiveScanFace(typeof reviewStickers[4] === "object" ? reviewStickers[4].color : reviewStickers[4]);
+                            setActiveScanFace(typeof reviewStickers[4] === "object" ? (reviewStickers[4].label || reviewStickers[4].color) : reviewStickers[4]);
                             setMode("REVIEW");
                           }} 
                           className="btn-primary py-3"
                         >
-                          This is the {FACE_LABELS[typeof reviewStickers[4] === "object" ? reviewStickers[4].color : reviewStickers[4]]} face
+                          This is the {FACE_LABELS[typeof reviewStickers[4] === "object" ? (reviewStickers[4].label || reviewStickers[4].color) : reviewStickers[4]]} face
                         </button>
                         <button 
                           onClick={() => setMode("REVIEW")} 

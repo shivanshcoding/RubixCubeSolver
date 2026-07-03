@@ -2,14 +2,16 @@
 
 import { motion } from "framer-motion";
 import { RiRefreshLine, RiCheckLine, RiInformationLine } from "react-icons/ri";
+import { useCubeStore } from "@/store/cubeStore";
 
 export default function FaceReviewPanel({ face, stickers, onAccept, onRescan, onEditSticker }) {
-  // Assume stickers is an array of length 9, each { color: "#hex", confidence: 0.95 }
-  // or simple strings if edited manually.
+  const colorMapping = useCubeStore((state) => state.colorMapping);
 
   const renderSticker = (s, i) => {
     const isLocked = i === 4; // Center sticker is locked
-    const bgColor = typeof s === "string" ? s : s.color;
+    // s can be a string (label like "U") or object { label: "U", confidence: 0.95 }
+    const label = typeof s === "string" ? s : (s.label || "unknown");
+    const bgColor = label !== "unknown" ? colorMapping[label] : "#333";
     const confidence = typeof s === "object" ? s.confidence : 1;
     
     return (
@@ -21,15 +23,16 @@ export default function FaceReviewPanel({ face, stickers, onAccept, onRescan, on
             ? "border-white/40 shadow-[inset_0_0_10px_rgba(255,255,255,0.2)]" 
             : "border-white/10 hover:border-white/50 cursor-pointer"
         }`}
-        style={{ aspectRatio: "1/1", backgroundColor: bgColor !== "unknown" ? bgColor : "#333" }}
+        style={{ aspectRatio: "1/1", backgroundColor: bgColor }}
       >
+        <span className="text-white/50 text-xs font-bold drop-shadow-md z-10 pointer-events-none">{label !== "unknown" ? label : "?"}</span>
         {isLocked && (
            <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
-             <div className="w-1.5 h-1.5 rounded-full bg-white/80" />
+             {/* Note: The dot is hidden or kept subtle */}
            </div>
         )}
-        {!isLocked && confidence < 0.6 && bgColor !== "unknown" && (
-           <div className="absolute top-1 right-1 text-red-500 text-[10px] bg-black/60 rounded px-1 font-bold">!</div>
+        {!isLocked && confidence < 0.9 && label !== "unknown" && (
+           <div className="absolute top-1 right-1 text-red-500 text-[10px] bg-black/60 rounded px-1 font-bold z-20">!</div>
         )}
       </div>
     );

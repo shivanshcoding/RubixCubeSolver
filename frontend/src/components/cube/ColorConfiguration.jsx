@@ -38,10 +38,8 @@ export default function ColorConfiguration({ tempColors, setTempColors, onConfir
       setValResult({
         success: false,
         status: "POOR",
-        score: 0,
         message: "Network error. Please try again.",
         warnings: ["Failed to reach validation server."],
-        color_metrics: {}
       });
     } finally {
       setIsValidating(false);
@@ -152,34 +150,11 @@ export default function ColorConfiguration({ tempColors, setTempColors, onConfir
                     {valResult.status === "GOOD" ? "Excellent" : valResult.status === "ACCEPTABLE" ? "Acceptable" : "Poor"}
                   </span>
                 </h3>
-                <div className="text-xs text-zinc-400 mt-1">Score: <strong className="text-zinc-200">{valResult.score} / 100</strong></div>
-                <div className="text-xs text-zinc-400">Expected Accuracy: <strong className="text-zinc-200">{valResult.expected_accuracy || (valResult.score > 85 ? "Excellent" : valResult.score > 70 ? "Good" : "Unreliable")}</strong></div>
+                <div className="text-xs text-zinc-400 mt-1">Status: <strong className="text-zinc-200">{valResult.status}</strong></div>
               </div>
             </div>
 
-            {/* Quality Bars */}
-            {valResult.color_metrics && Object.keys(valResult.color_metrics).length > 0 && (
-              <div className="bg-black/30 rounded-lg p-3 border border-white/5 space-y-2">
-                <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-2">Color Quality</div>
-                {Object.entries(valResult.color_metrics).map(([face, metric]) => (
-                  <div key={face} className="flex items-center gap-3">
-                    <div className="w-12 text-xs font-medium text-zinc-300">{metric.name}</div>
-                    <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
-                      <motion.div 
-                        initial={{ width: 0 }}
-                        animate={{ width: `${metric.quality}%` }}
-                        transition={{ duration: 0.8, ease: "easeOut" }}
-                        className={`h-full rounded-full ${metric.quality > 85 ? "bg-zinc-300" : metric.quality > 70 ? "bg-yellow-500" : "bg-red-500"}`}
-                      />
-                    </div>
-                    <div className="w-10 text-right text-xs font-mono text-zinc-400 flex justify-end gap-1 items-center">
-                      {metric.quality}
-                      {metric.quality <= 85 && <RiErrorWarningLine className={metric.quality <= 70 ? "text-red-400" : "text-yellow-400"} />}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+
 
             {/* Warnings */}
             {valResult.warnings && valResult.warnings.length > 0 && (

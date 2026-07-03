@@ -11,6 +11,7 @@ import base64
 import numpy as np
 import cv2
 import json
+import time
 
 from app.core.dependencies import get_db, get_current_user, get_optional_user
 from app.models.cube import (
@@ -223,6 +224,10 @@ async def live_scan_websocket(websocket: WebSocket):
     smoother = TemporalSmoother()
     palette_cache = PaletteCache()
     debug_state = DebugState()
+    buffer_start_time = None
+    capture_buffer = []
+    BUFFER_DURATION = 2.0
+
     saved_coords = None
 
     try:
@@ -270,15 +275,95 @@ async def live_scan_websocket(websocket: WebSocket):
                     debug_state=debug_state,
                 )
                 result["fps"] = fps
+                
+                face_stable = result.get("face_stable", False)
+                
+                if buffer_start_time is None:
+                    if face_stable:
+                        buffer_start_time = time.time()
+                        result["status"] = "buffering"
+                        result["seconds_remaining"] = BUFFER_DURATION
+                        result["progress"] = 0.0
+                        print(f"\n[Buffer] Face Stable: TRUE. Entering BUFFERING mode.")
+                else:
+                    elapsed = time.time() - buffer_start_time
+                    if elapsed < BUFFER_DURATION:
+                        if face_stable:
+                            result["status"] = "buffering"
+                            result["seconds_remaining"] = round(BUFFER_DURATION - elapsed, 1)
+                            result["progress"] = elapsed / BUFFER_DURATION
+                            
+                            stickers = result.get("stickers", [])
+                            avg_conf = sum(s.get("confidence", 0) for s in stickers) / len(stickers) if stickers else 0
+                            diagnostics = result.get("diagnostics", {})
+                            
+                            capture_buffer.append({
+                                "stickers": stickers,
+                                "timestamp": time.time(),
+                                "avg_confidence": avg_conf,
+                                "sharpness": diagnostics.get("sharpness", 0),
+                                "glare": diagnostics.get("glare", 100),
+                                "lighting": diagnostics.get("lighting", 0),
+                            })
+                            
+                            print(f"[Buffer] Stable frame added. Size: {len(capture_buffer)}. Avg Conf: {avg_conf:.3f}")
+                        else:
+                            print("[Buffer] Square became unstable during buffering! Reverting to detecting.")
+                            buffer_start_time = None
+                            capture_buffer = []
+                            result["status"] = "detecting"
+                    else:
+                        # Timer finished!
+                        print(f"\n[Buffer] Capture Window Finished")
+                        print(f"Frames Analysed in window: {int(elapsed * fps) if fps > 0 else 'Unknown'}")
+                        print(f"Stable Frames collected: {len(capture_buffer)}")
+                        
+                        if len(capture_buffer) > 0:
+                            # Sort by avg_conf (desc), sharpness (desc), glare (asc), lighting (desc)
+                            capture_buffer.sort(key=lambda x: (
+                                x["avg_confidence"],
+                                x["sharpness"],
+                                -x["glare"],
+                                x["lighting"]
+                            ), reverse=True)
+                            
+                            best_frame = capture_buffer[0]
+                            print(f"Best Frame Avg Confidence: {best_frame['avg_confidence']:.3f}")
+                            print("Sending Final Capture.\n")
+                            
+                            result["status"] = "captured"
+                            result["stickers"] = best_frame["stickers"]
+                        else:
+                            print("WARNING: No stable frames collected during buffer window! Reverting to detecting.")
+                            buffer_start_time = None
+                            result["status"] = "detecting"
+                            capture_buffer = []
+
+                print(f"[WS] Sending JSON payload (status: {result.get('status')})")
                 await websocket.send_json(result)
+                print(f"[WS] Payload successfully sent.")
+                
+                # If we just captured, we should reset so the frontend can receive future detecting status if it restarts.
+                # Actually, if it's captured, the frontend will likely close the WS. If not, we wait here.
+                if result.get("status") == "captured":
+                    buffer_start_time = None
+                    capture_buffer = []
             except Exception as e:
+                import traceback
+
+                traceback.print_exc()
+
+                print("EXCEPTION:", repr(e))
+
                 await websocket.send_json({
                     "status": "error",
-                    "stickers": [{"color": "unknown", "confidence": 0.0, "stable": False} for _ in range(9)],
-                    "diagnostics": {"lighting": 0, "sharpness": 0, "angle": 0, "glare": 0},
-                    "fps": 0,
-                    "face_stable": False,
-                    "square_stable": [False] * 9,
+                    "error": str(e),
+                    "trace": traceback.format_exc(),
+                    "stickers": [{"color":"unknown","confidence":0,"stable":False} for _ in range(9)],
+                    "diagnostics": {},
+                    "fps":0,
+                    "face_stable":False,
+                    "square_stable":[False]*9
                 })
 
     except WebSocketDisconnect:

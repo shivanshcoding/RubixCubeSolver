@@ -23,7 +23,7 @@ from typing import Dict, List, Optional, Tuple
 # ═══════════════════════════════════════════════════════════════════
 
 DEBUG_MODE = True
-DEBUG_INTERVAL_SECONDS = 3.0  # Dump debug every 5 seconds
+DEBUG_INTERVAL_SECONDS = 3.0 
 
 
 @dataclass
@@ -44,27 +44,31 @@ class PipelineConfig:
     """All tunable CV parameters in one place."""
 
     # ── Cropping & Preprocessing ─────────────────────────────────
-    center_crop_ratio: float = 0.55  # Crop the center 55% of the patch
-    median_blur_ksize: int = 3       # Lightweight blur, 0 to disable
+    center_crop_ratio: float = 0.75
+    median_blur_ksize: int = 3       
 
     # ── Dynamic HSV Classification ───────────────────────────────
-    hue_tolerance: int = 15          # Fixed hue tolerance around calibrated color
+    hue_tolerance: int = 13
     saturation_tolerance: int = 120
     value_tolerance: int = 120
     white_saturation_offset: int = 40
     white_value_offset: int = 40
     min_valid_pixels: int = 15
-    min_confidence_threshold: float = 0.6
+    min_purity: float = 0.90          # Winner must occupy at least 90% of valid pixels
+    max_runner_ratio: float = 0.08    # Runner-up ≤ 8% of winner
+    min_lab_margin: float = 10.0      # Minimum ΔE difference between winner and runner-up
     morph_kernel_size: int = 3
 
     # ── Palette validation ───────────────────────────────────────
-    de_threshold_poor: float = 30.0
-    de_threshold_acceptable: float = 45.0
+    de_threshold_poor: float = 40.0
+    de_threshold_acceptable: float = 50.0
     hue_threshold_poor: float = 18.0
 
-    # ── Temporal smoothing ───────────────────────────────────────
-    temporal_window: int = 8        # rolling history length
-    temporal_majority_weight: float = 0.65  # fraction of weighted sum required for stability
+    # ── Temporal Smoothing ───────────────────────────────────
+
+    temporal_window: int = 8
+    temporal_majority_weight: float = 0.80
+    required_stable_frames: int = 5
 
     # ── Upload / perspective warp ────────────────────────────────
     warp_size: int = 300            # warped face is warp_size × warp_size
@@ -133,8 +137,6 @@ def generate_hsv_ranges(palette_hex: Dict[str, str], palette_labs: Dict[str, np.
         base_hsvs[face] = (h, s, v)
         
     non_white_faces = [f for f in base_hsvs if f != white_face]
-    
-    face_names = {"U": "WHITE", "D": "YELLOW", "F": "GREEN", "B": "BLUE", "R": "RED", "L": "ORANGE"}
     
     for face in non_white_faces:
         h, s, v = base_hsvs[face]
@@ -210,11 +212,10 @@ def validate_palette(
 ) -> Dict:
     """Validate whether the six user-selected colours are suitable for CV before generating OpenCV bounds."""
     FACE_LABELS = {"U": "Up", "D": "Down", "F": "Front", "B": "Back", "R": "Right", "L": "Left"}
-    face_names = {"U": "White", "D": "Yellow", "F": "Green", "B": "Blue", "R": "Red", "L": "Orange"}
 
     if not palette or len(palette) != 6:
         return {
-            "success": False, "status": "POOR", "score": 0,
+            "success": False, "status": "POOR",
             "message": "Exactly six colours must be provided.",
             "minimum_distance": 0.0, "average_distance": 0.0,
             "distances": {}, "warnings": ["Expected exactly 6 colours."],
@@ -222,7 +223,7 @@ def validate_palette(
 
     if len(set(palette.values())) != 6:
         return {
-            "success": False, "status": "POOR", "score": 0,
+            "success": False, "status": "POOR",
             "message": "Duplicate colours detected.",
             "minimum_distance": 0.0, "average_distance": 0.0,
             "distances": {}, "warnings": ["Two or more faces share the same colour."],
@@ -232,7 +233,7 @@ def validate_palette(
         labs = convert_palette_to_lab(palette)
     except ValueError as e:
         return {
-            "success": False, "status": "POOR", "score": 0,
+            "success": False, "status": "POOR",
             "message": str(e),
             "minimum_distance": 0.0, "average_distance": 0.0,
             "distances": {}, "warnings": [str(e)],
@@ -250,7 +251,6 @@ def validate_palette(
         base_hsvs[face] = (int(hsv_cv[0]), int(hsv_cv[1]), int(hsv_cv[2]))
 
     warnings = []
-    score = 100.0
 
     # 1. White Neutrality Check
     w_hex = palette[white_face]
@@ -262,29 +262,9 @@ def validate_palette(
     w_s = w_hsv[1]
 
     if w_s > 35 or abs(w_a) > 15 or abs(w_b_val) > 15:
-        score -= 15
-        warnings.append("⚠ Selected white has noticeable colour tint. Detection may confuse white with other colours (e.g. yellow).")
+        warnings.append("⚠ Selected whitish colour has noticeable colour tint. Detection may confuse white with other colours (e.g. yellow).")
     else:
-        warnings.append("✓ White calibration is excellent.")
-
-    # 2. Saturation and Value checks
-    for face, (h, s, v) in base_hsvs.items():
-        if face == white_face:
-            continue
-        name = face_names.get(face, face)
-        if s < 100:
-            score -= 10
-            warnings.append(f"⚠ {name} saturation is very low ({s}). Classification may become unreliable.")
-        elif s < 130:
-            score -= 5
-            warnings.append(f"⚠ {name} saturation is slightly low ({s}).")
-            
-        if v < 70:
-            score -= 15
-            warnings.append(f"⚠ {name} brightness is extremely low ({v}), almost black/brown.")
-        elif v < 100:
-            score -= 10
-            warnings.append(f"⚠ {name} brightness is very low ({v}). Classification may be unreliable.")
+        warnings.append("✓ Whitish colour calibration is excellent.")
 
     # 3. LAB Distances
     distances = {}
@@ -303,16 +283,19 @@ def validate_palette(
             pairs_count += 1
             if de < min_de:
                 min_de = de
-                weakest_lab_pair = f"{face_names.get(f1, f1)} ↔ {face_names.get(f2, f2)}"
+                weakest_lab_pair = f"{f1} ↔ {f2}"
 
     avg_de = total_de / pairs_count if pairs_count > 0 else 0.0
 
-    if min_de < 30:
-        score -= (30 - min_de) * 2.5
-    if min_de < 20:
+    if min_de < 15:
+        status = "POOR"
+        warnings.append("❌ Almost identical. CV pipeline will fail.")
+    elif min_de < 22:
+        status = "POOR"
         warnings.append(f"⚠ Colours in {weakest_lab_pair} are extremely similar (ΔE={min_de:.1f}).")
     elif min_de < 30:
-        warnings.append(f"⚠ Colours in {weakest_lab_pair} are quite similar (ΔE={min_de:.1f}).")
+        status = "ACCEPTABLE"
+        warnings.append(f"⚠ Colours in {weakest_lab_pair} are quite similar (ΔE={min_de:.1f}). Some ambiguity possible.")
 
     # 4. Hue Separation & Theoretical Overlap
     min_hue_sep = float('inf')
@@ -332,74 +315,36 @@ def validate_palette(
             total_hue_sep += hue_dist
             hue_pairs += 1
             
-            n1, n2 = face_names.get(f1, f1), face_names.get(f2, f2)
+            n1, n2 = f1, f2
             
             if hue_dist < min_hue_sep:
                 min_hue_sep = hue_dist
                 weakest_hue_pair = f"{n1} ↔ {n2}"
                 
-            # Theoretical Overlap (ideal boundary is ±18° representing max expected shift without clipping)
-            ideal_range_width = 36.0 # ±18°
-            # Two colours overlap if their distance is less than the combined half-widths (18+18 = 36)
+            # Theoretical Overlap (ideal boundary is ±15° representing max expected shift without clipping)
+            ideal_range_width = 30.0 # ±15°
+            # Two colours overlap if their distance is less than the combined half-widths (15+15 = 36)
             overlap = ideal_range_width - hue_dist
             if overlap > 0:
                 if overlap > max_overlap: max_overlap = overlap
-                score -= overlap * 1.5
-                if overlap > 10:
-                    warnings.append(f"⚠ {n1} and {n2} are only {hue_dist:.1f}° apart. Severe HSV overlap would occur without clipping. Classification unstable.")
-                else:
-                    warnings.append(f"⚠ {n1} and {n2} are only {hue_dist:.1f}° apart. HSV overlap would occur without clipping.")
-
-    avg_hue_sep = total_hue_sep / hue_pairs if hue_pairs > 0 else 0.0
-
-    score = max(0.0, min(100.0, score))
+                warnings.append(f"⚠ {n1} and {n2} are only {hue_dist:.1f}° apart. HSV overlap will occurr, classification between them may be unstable.")
     
-    if score >= 85 and min_de >= 30 and max_overlap <= 4:
+    if min_de >= 30 and max_overlap <= 4 and len(warnings) <= 2:
         status = "GOOD"
-        expected = "High"
-    elif score >= 60 and min_de >= 20 and max_overlap <= 15:
+    elif min_de >= 20 and max_overlap <= 15 and len(warnings) <= 5:
         status = "ACCEPTABLE"
-        expected = "Medium"
     else:
         status = "POOR"
-        expected = "Low"
-
-    # Generate Color Metrics for UI Progress Bars
-    color_metrics = {}
-    for face, (h, s, v) in base_hsvs.items():
-        name = face_names.get(face, face)
-        if face == white_face:
-            # White quality drops if it has saturation or tint
-            w_hsv = base_hsvs[white_face]
-            w_s = w_hsv[1]
-            w_bgr = np.array([[[hex_to_rgb(palette[white_face])[2], hex_to_rgb(palette[white_face])[1], hex_to_rgb(palette[white_face])[0]]]], dtype=np.uint8)
-            w_lab = cv2.cvtColor(w_bgr, cv2.COLOR_BGR2LAB)[0, 0]
-            tint = max(abs(w_lab[1] - 128.0), abs(w_lab[2] - 128.0))
-            quality = max(0, min(100, 100 - int(w_s * 0.5) - int(tint * 2)))
-        else:
-            # Non-white quality drops if saturation or value is low
-            s_norm = s / 255.0
-            v_norm = v / 255.0
-            quality = int((s_norm * 0.6 + v_norm * 0.4) * 100)
-            
-        color_metrics[face] = {
-            "name": name,
-            "quality": quality,
-            "hsv": [int(h), int(s), int(v)]
-        }
 
     return {
         "success": status != "POOR",
         "status": status,
-        "score": int(score),
-        "message": f"Calibration is {status}. Score: {int(score)}/100.",
+        "message": f"Calibration is {status}",
         "minimum_distance": float(min_de),
         "average_distance": float(avg_de),
         "distances": {k: float(v) for k, v in distances.items()},
         "warnings": warnings,
         "weakest_pair": weakest_lab_pair,
-        "expected_accuracy": expected,
-        "color_metrics": color_metrics
     }
 
 
@@ -520,6 +465,7 @@ def classify_patch_hsv(
     
     pixel_counts = {}
     face_masks = {}
+    purity = 0.0
 
     rep = representative_color(bgr_patch, hsv_patch, glare_mask)
     rep_hsv = rep['hsv']
@@ -562,8 +508,6 @@ def classify_patch_hsv(
             "classification_failed": True
         }
 
-    face_names = {"U": "Up Colour", "D": "Down Colour", "F": "Front Colour", "B": "Back Colour", "R": "Right Colour", "L": "Left Colour"}
-
     patch_dir = os.path.join(debug_dir, f"patch_{patch_idx}") if is_debug_frame else ""
     if is_debug_frame and patch_dir:
         os.makedirs(patch_dir, exist_ok=True)
@@ -576,7 +520,7 @@ def classify_patch_hsv(
     mask_imgs = {}
 
     for face, ranges in hsv_ranges.items():
-        name = face_names.get(face, face)
+        name = face
         if is_debug_frame:
             print("-" * 42)
             print(f"{name}")
@@ -692,17 +636,22 @@ def classify_patch_hsv(
             "face": "unknown",
             "runner_up": "unknown",
             "confidence": 0.0,
+            "purity": purity,
             "pixel_counts": pixel_counts,
-            "reason": "All masks empty"
+            "reason": "All masks empty",
+            "valid": False,
         }
         
     winner = sorted_faces[0][0]
     winner_count = sorted_faces[0][1]
+
+    valid_pixels = max(rep["valid_pixels"], 1)
+    purity = winner_count / valid_pixels
     
     reason = "Dominant HSV mask (no overlaps)."
-    confidence = 1.0
+    confidence = min(1.0, winner_count / max(1, rep.get("valid_pixels", 1)))
     tie_detected = False
-    
+
     if len(active_faces) >= 2:
         runner_up = sorted_faces[1][0]
         runner_up_count = sorted_faces[1][1]
@@ -738,13 +687,18 @@ def classify_patch_hsv(
         
         winner = best_face
         runner_up = best_runner
-        
-        confidence = max(0.0, 1.0 - (d_min / max(d_runner, 1e-5)))
-        
+
         d_hue_w = 0.0
         d_hue_r = 0.0
-        
-        if abs(d_min - d_runner) < 3.0:
+
+        LAB_TIE_THRESHOLD = 3.0
+        LAB_CONFIDENT_DISTANCE = 20.0
+
+        if (
+            d_min <= LAB_CONFIDENT_DISTANCE
+            and
+            abs(d_min - d_runner) <= LAB_TIE_THRESHOLD
+        ):
             # Hue fallback
             w_base = base_hsvs[winner]
             r_base = base_hsvs[runner_up]
@@ -758,7 +712,6 @@ def classify_patch_hsv(
             
             if d_hue_r < d_hue_w:
                 winner, runner_up = runner_up, winner
-                confidence = 0.51
                 reason = "LAB was tied. Hue distance broke the tie."
     else:
         runner_up = "unknown"
@@ -771,30 +724,45 @@ def classify_patch_hsv(
         print("------------------------------------------")
         for f in ["U", "D", "F", "B", "R", "L"]:
             if f in pixel_counts:
-                print(f"{face_names.get(f, f)} : {pixel_counts[f]}")
+                print(f"{f} : {pixel_counts[f]}")
             
         print(f"\nTie ? {'YES' if tie_detected else 'NO'}")
         
         if tie_detected:
             print(f"\nLAB Tie-Break Invoked")
-            print(f"Winner by pixels: {face_names.get(orig_winner, orig_winner)} ({winner_count})")
-            print(f"Runner up by pixels: {face_names.get(orig_runner, orig_runner)} ({runner_up_count})")
+            print(f"Winner by pixels: {orig_winner} ({winner_count})")
+            print(f"Runner up by pixels: {orig_runner} ({runner_up_count})")
             print("\nLAB Distance")
-            print(f"{face_names.get(winner, winner)} : {d_min:.1f}")
-            print(f"{face_names.get(runner_up, runner_up)} : {d_runner:.1f}")
+            print(f"{best_face} : {d_min:.1f}")
+            print(f"{best_runner} : {d_runner:.1f}")
             
             if abs(d_min - d_runner) < 3.0:
                 print(f"\nHue Distance")
-                print(f"{face_names.get(winner, winner)} : {d_hue_w:.1f} (OpenCV scale)")
-                print(f"{face_names.get(runner_up, runner_up)} : {d_hue_r:.1f} (OpenCV scale)")
+                print(f"{best_face} : {d_hue_w:.1f} (OpenCV scale)")
+                print(f"{best_runner} : {d_hue_r:.1f} (OpenCV scale)")
                 
-        print(f"\nFinal Winner : {face_names.get(winner, winner)}")
+        print(f"\nFinal Winner : {winner}")
         print(f"Reason : {reason}")
+
+    classification_valid = True
+
+    if purity < config.min_purity:
+        return {
+            "face": "unknown",
+            "confidence": 0.0,
+            "purity": purity,
+            "valid": False,
+            "runner_up": runner_up,
+            "reason": "Low Purity",
+            "pixel_counts": pixel_counts,
+        }
 
     return {
         "face": winner,
+        "confidence": confidence,
+        "purity": purity,
+        "valid": True,
         "runner_up": runner_up,
-        "confidence": min(1.0, confidence),
         "pixel_counts": pixel_counts,
         "reason": reason
     }
@@ -809,8 +777,9 @@ class _StickerFrame:
     """One temporal observation for a single sticker."""
     face: str
     confidence: float
+    purity: float
+    valid: bool
     timestamp: float
-
 
 class TemporalSmoother:
     """Per-sticker rolling-window weighted majority-vote stabilisation.
@@ -821,6 +790,7 @@ class TemporalSmoother:
         self.window = config.temporal_window
         self.majority_weight = config.temporal_majority_weight
         self._history: List[deque] = [deque(maxlen=self.window) for _ in range(9)]
+        self.min_purity = config.min_purity
         
         # Exponential weights, most recent = highest
         decay = 0.8
@@ -840,6 +810,8 @@ class TemporalSmoother:
             self._history[i].append(_StickerFrame(
                 face=cls["face"],
                 confidence=cls["confidence"],
+                purity=cls["purity"],
+                valid=cls["valid"],
                 timestamp=now,
             ))
 
@@ -873,9 +845,18 @@ class TemporalSmoother:
             label_weight = vote_weights[best_label]
             fraction = label_weight / total_weight
             avg_conf = float(np.mean(vote_confs[best_label]))
+            avg_purity = float(np.mean([
+                e.purity
+                for e in buf
+                if e.face == best_label
+            ]))
 
             # Stability depends purely on the voting fraction now
-            is_stable = fraction >= self.majority_weight
+            is_stable = bool(
+                fraction >= self.majority_weight
+                and avg_purity >= self.min_purity
+                and best_label != "unknown"
+            )
             stable_flags.append(is_stable)
             stable_labels.append(best_label if is_stable else buf[-1].face)
             
@@ -884,6 +865,7 @@ class TemporalSmoother:
                 "majority": best_label,
                 "majority_pct": fraction * 100.0,
                 "avg_conf": avg_conf,
+                "avg_purity": avg_purity,
                 "stable": is_stable
             })
 
@@ -934,7 +916,7 @@ def _compute_color_stats(bgr_patch: np.ndarray, mask: Optional[np.ndarray] = Non
         valid_pixels = bgr_patch.reshape(-1, 3)
         
     bgr_median = np.median(valid_pixels, axis=0)
-    return {"bgr_median": bgr_median}
+    return {"bgr_median": bgr_median.tolist()}
 
 
 def _sticker_diagnostics(
@@ -1030,8 +1012,7 @@ def _generate_debug_output(
     print("====================================")
     for face, ranges in hsv_ranges.items():
         # Map face letter to common name if possible (or just print the face)
-        face_names = {"U": "WHITE", "D": "YELLOW", "F": "GREEN", "B": "BLUE", "R": "RED", "L": "ORANGE"}
-        name = face_names.get(face, face)
+        name = face
         print(name)
         
         for i, (lower, upper) in enumerate(ranges):
@@ -1189,8 +1170,9 @@ def process_patches(
         for i, cls in enumerate(classifications):
             label = stable_labels[i] if square_stable[i] else cls["face"]
             stickers.append({
-                "color": palette_hex.get(label, "unknown"),
+                "label": label,
                 "confidence": cls["confidence"],
+                "purity": cls["purity"],
                 "stable": square_stable[i],
                 "diagnostics": sticker_diags[i],
             })
@@ -1294,7 +1276,7 @@ def scan_single_face(
             face_label = cls["face"]
             grid[r][c] = face_label
             stickers.append({
-                "color": palette_hex.get(face_label, "unknown"),
+                "label": face_label,
                 "confidence": cls["confidence"],
             })
     else:
@@ -1307,7 +1289,7 @@ def scan_single_face(
             rgb = bgr[::-1]
             hex_color = "#{:02x}{:02x}{:02x}".format(*rgb)
             grid[r][c] = hex_color
-            stickers.append({"color": hex_color, "confidence": 0.5})
+            stickers.append({"label": "unknown", "confidence": 0.5})
 
     diagnostics = calculate_diagnostics(img)
 
