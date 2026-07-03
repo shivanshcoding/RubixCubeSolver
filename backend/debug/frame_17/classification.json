@@ -1,0 +1,146 @@
+[
+  {
+    "face": "B",
+    "confidence": 0.9037540942302847,
+    "purity": 0.9037540942302847,
+    "valid": true,
+    "runner_up": "unknown",
+    "pixel_counts": {
+      "D": 0,
+      "F": 0,
+      "B": 3587,
+      "R": 0,
+      "L": 0,
+      "U": 0
+    },
+    "reason": "Dominant HSV mask (no overlaps)."
+  },
+  {
+    "face": "unknown",
+    "confidence": 0.0,
+    "purity": 0.04837490551776266,
+    "valid": false,
+    "runner_up": "unknown",
+    "reason": "Low Purity",
+    "pixel_counts": {
+      "D": 0,
+      "F": 0,
+      "B": 0,
+      "R": 0,
+      "L": 0,
+      "U": 192
+    }
+  },
+  {
+    "face": "D",
+    "confidence": 1.0,
+    "purity": 1.0,
+    "valid": true,
+    "runner_up": "unknown",
+    "pixel_counts": {
+      "D": 3969,
+      "F": 0,
+      "B": 0,
+      "R": 0,
+      "L": 0,
+      "U": 0
+    },
+    "reason": "Dominant HSV mask (no overlaps)."
+  },
+  {
+    "face": "unknown",
+    "confidence": 0.0,
+    "purity": 0.8279163517258755,
+    "valid": false,
+    "runner_up": "unknown",
+    "reason": "Low Purity",
+    "pixel_counts": {
+      "D": 0,
+      "F": 3286,
+      "B": 0,
+      "R": 0,
+      "L": 0,
+      "U": 0
+    }
+  },
+  {
+    "face": "R",
+    "confidence": 1.0,
+    "purity": 1.0,
+    "valid": true,
+    "runner_up": "unknown",
+    "pixel_counts": {
+      "D": 0,
+      "F": 0,
+      "B": 0,
+      "R": 3969,
+      "L": 0,
+      "U": 0
+    },
+    "reason": "Dominant HSV mask (no overlaps)."
+  },
+  {
+    "face": "B",
+    "confidence": 1.0,
+    "purity": 1.0,
+    "valid": true,
+    "runner_up": "unknown",
+    "pixel_counts": {
+      "D": 0,
+      "F": 0,
+      "B": 3969,
+      "R": 0,
+      "L": 0,
+      "U": 0
+    },
+    "reason": "Dominant HSV mask (no overlaps)."
+  },
+  {
+    "face": "unknown",
+    "confidence": 0.0,
+    "purity": 0.6775006298815822,
+    "valid": false,
+    "runner_up": "R",
+    "reason": "Low Purity",
+    "pixel_counts": {
+      "D": 0,
+      "F": 0,
+      "B": 0,
+      "R": 2689,
+      "L": 2464,
+      "U": 0
+    }
+  },
+  {
+    "face": "unknown",
+    "confidence": 0.0,
+    "purity": 0.8490803728898967,
+    "valid": false,
+    "runner_up": "unknown",
+    "reason": "Low Purity",
+    "pixel_counts": {
+      "D": 0,
+      "F": 0,
+      "B": 0,
+      "R": 3370,
+      "L": 0,
+      "U": 0
+    }
+  },
+  {
+    "face": "unknown",
+    "confidence": 0.0,
+    "purity": 0.8518518518518519,
+    "valid": false,
+    "runner_up": "unknown",
+    "reason": "Low Purity",
+    "pixel_counts": {
+      "D": 0,
+      "F": 0,
+      "B": 3381,
+      "R": 0,
+      "L": 0,
+      "U": 0
+    }
+  }
+]
