@@ -25,6 +25,7 @@ export default function WebcamScanner({
   const [wsStatus, setWsStatus] = useState("connecting"); // connecting, connected, error
   const [wsError, setWsError] = useState("");
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   
   const [fps, setFps] = useState(0);
   const frameCountRef = useRef(0);
@@ -62,6 +63,11 @@ export default function WebcamScanner({
     onCaptureRef.current = onCapture;
   }, [onCapture]);
 
+  const onUploadFallbackRef = useRef(onUploadFallback);
+  useEffect(() => {
+    onUploadFallbackRef.current = onUploadFallback;
+  }, [onUploadFallback]);
+
 // Timeout logic
   useEffect(() => {
     let timer20, timer60;
@@ -77,15 +83,18 @@ export default function WebcamScanner({
       }, 20000);
 
       timer60 = setTimeout(() => {
-        if (onUploadFallback) onUploadFallback();
-      }, 60000);
+        setIsRedirecting(true);
+        setTimeout(() => {
+          if (onUploadFallbackRef.current) onUploadFallbackRef.current();
+        }, 2500);
+      }, 30000);
     }
 
     return () => {
       clearTimeout(timer20);
       clearTimeout(timer60);
     };
-  }, [isCameraActive, backendStatus, onUploadFallback]);
+  }, [isCameraActive, backendStatus]);
 
   const lastSentGridSizeRef = useRef(null);
 
@@ -416,6 +425,26 @@ const processFrame = () => {
                 <button onClick={onUploadFallback} className="flex-1 py-2 rounded-lg border border-white/20 text-zinc-300 text-xs font-semibold hover:bg-white/5 transition-colors">Use Upload</button>
               )}
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Redirecting Overlay */}
+      <AnimatePresence>
+        {isRedirecting && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center z-40"
+          >
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-5">
+               <span className="w-8 h-8 border-2 border-white/10 border-t-amber-400 rounded-full animate-spin" />
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2 text-center px-4">Scanning is taking too long</h3>
+            <p className="text-sm text-zinc-400 text-center max-w-xs px-4 leading-relaxed">
+              Redirecting to Upload Fallback to help you capture the face manually...
+            </p>
           </motion.div>
         )}
       </AnimatePresence>

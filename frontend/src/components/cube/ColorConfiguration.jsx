@@ -4,7 +4,8 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   RiPaletteLine, RiArrowRightLine, RiLoader4Line, 
-  RiCheckLine, RiErrorWarningLine, RiCloseLine, RiRefreshLine
+  RiCheckLine, RiErrorWarningLine, RiCloseLine, RiRefreshLine,
+  RiContrastDrop2Line, RiRainbowLine, RiLineChartLine
 } from "react-icons/ri";
 import { validatePalette } from "@/services/api";
 
@@ -132,48 +133,66 @@ export default function ColorConfiguration({ tempColors, setTempColors, onConfir
               key="analysis-result"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className={`flex flex-col gap-5 p-5 rounded-2xl border bg-black/40 backdrop-blur-md overflow-hidden ${
-                valResult.status === "GOOD" ? "border-green-500/30" : 
-                valResult.status === "ACCEPTABLE" ? "border-yellow-500/30" : 
-                "border-red-500/30"
-              }`}
+              className="flex flex-col gap-5 p-5 rounded-xl border border-white/10 bg-black/40 backdrop-blur-sm"
             >
               {/* Header Status */}
               <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                  valResult.status === "GOOD" ? "bg-green-500/20 text-green-400" : 
-                  valResult.status === "ACCEPTABLE" ? "bg-yellow-500/20 text-yellow-400" : 
-                  "bg-red-500/20 text-red-400"
-                }`}>
-                  {valResult.status === "GOOD" ? <RiCheckLine className="w-5 h-5" /> : <RiErrorWarningLine className="w-5 h-5" />}
-                </div>
+                <div className={`w-2 h-2 rounded-full ${
+                  valResult.status === "GOOD" ? "bg-green-500" : 
+                  valResult.status === "ACCEPTABLE" ? "bg-yellow-500" : 
+                  "bg-red-500"
+                }`} />
                 <div>
-                  <h3 className="text-base font-bold text-white">
-                    {valResult.status === "GOOD" ? "Excellent Palette!" : 
+                  <h3 className="text-sm font-medium text-white">
+                    {valResult.status === "GOOD" ? "Excellent Palette" : 
                      valResult.status === "ACCEPTABLE" ? "Acceptable Palette" : 
-                     "Poor Palette Contrast"}
+                     "Poor Contrast"}
                   </h3>
-                  <p className="text-sm text-zinc-400 mt-0.5">
-                    {valResult.status === "GOOD" ? "Colors are easily distinguishable." : 
-                     valResult.status === "ACCEPTABLE" ? "Some colors are similar, but usable." : 
-                     "Colors are too similar for reliable detection."}
-                  </p>
                 </div>
               </div>
 
-              {/* Simplified Warnings */}
-              {valResult.status !== "GOOD" && valResult.warnings && valResult.warnings.length > 0 && (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                  <div className="text-xs uppercase tracking-wider text-zinc-500 font-bold mb-3">Suggestions</div>
+              {/* Metrics Grid */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-white/5 rounded-lg p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Perceptual Dist</div>
+                  <div className="flex items-end gap-1">
+                    <span className="text-lg font-mono text-white">{valResult.minimum_distance?.toFixed(1) || "0.0"}</span>
+                    <span className="text-[10px] text-zinc-500 mb-1">ΔE</span>
+                  </div>
+                </div>
+
+                <div className="bg-white/5 rounded-lg p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Hue Sep</div>
+                  <div className="flex items-end gap-1">
+                    <span className="text-lg font-mono text-white">{valResult.minimum_hue_distance?.toFixed(1) || "0.0"}</span>
+                    <span className="text-[10px] text-zinc-500 mb-1">deg</span>
+                  </div>
+                </div>
+
+                <div className="bg-white/5 rounded-lg p-3">
+                  <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Overlap</div>
+                  <div className="flex items-end gap-1">
+                    <span className="text-lg font-mono text-white">{valResult.maximum_hue_overlap?.toFixed(1) || "0.0"}</span>
+                    <span className="text-[10px] text-zinc-500 mb-1">deg</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Suggestions / Warnings */}
+              {valResult.warnings && valResult.warnings.length > 0 && (
+                <div className="border-t border-white/5 pt-4 mt-2">
                   <div className="space-y-2">
                     {valResult.warnings.map((w, i) => {
                       const isGood = w.includes("✓") || w.includes("excellent") || w.includes("Good");
                       const cleanW = w.replace(/^[^a-zA-Z]+/, "").trim();
-                      if (isGood) return null; // Only show issues
                       return (
-                        <div key={i} className="flex gap-2 text-sm text-zinc-300">
-                          <RiErrorWarningLine className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
-                          <span>{cleanW}</span>
+                        <div key={i} className="flex gap-2 text-sm">
+                          {isGood ? (
+                            <RiCheckLine className="w-4 h-4 text-green-400 shrink-0 mt-0.5" />
+                          ) : (
+                            <RiErrorWarningLine className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                          )}
+                          <span className={isGood ? "text-zinc-400" : "text-zinc-300"}>{cleanW}</span>
                         </div>
                       );
                     })}
@@ -182,20 +201,19 @@ export default function ColorConfiguration({ tempColors, setTempColors, onConfir
               )}
 
               {/* Actions */}
-              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <div className="flex gap-3 pt-4 border-t border-white/5 mt-2">
                 <button 
                   onClick={() => setValResult(null)}
-                  className="btn-ghost flex-1 flex justify-center items-center gap-2 py-2.5"
+                  className="btn-ghost flex-1 py-2 text-xs uppercase tracking-wider"
                 >
-                  <RiRefreshLine className="w-4 h-4" />
                   Adjust Colors
                 </button>
                 {valResult.success && (
                   <button 
                     onClick={onConfirm}
-                    className="btn-primary flex-1 py-2.5 shadow-[0_0_15px_rgba(59,130,246,0.2)]"
+                    className="btn-primary flex-1 py-2 text-xs uppercase tracking-wider"
                   >
-                    Confirm & Continue
+                    Confirm
                   </button>
                 )}
               </div>

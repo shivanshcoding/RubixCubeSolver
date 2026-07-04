@@ -200,7 +200,7 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     <Link 
-                      href={`/cube/solution?state=${activity.cube_string}`} 
+                      href={`/cube/solution?state=${activity.cube_string}&source=/dashboard`} 
                       className="btn-ghost shrink-0 text-xs py-1.5 px-3 flex items-center gap-1.5 self-end sm:self-auto"
                     >
                       View Solution <RiArrowRightLine className="w-3 h-3" />

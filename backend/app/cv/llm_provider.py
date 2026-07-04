@@ -32,6 +32,16 @@ class BaseLLMProvider(ABC):
         """
         ...
 
+    @abstractmethod
+    def analyze_single_face(
+        self, image_bytes: bytes, palette_hex: Dict[str, str]
+    ) -> Dict[str, Any]:
+        """
+        Analyze a single cube face image.
+        Returns: {"stickers": [...], "grid": [...], "method": "llm"}
+        """
+        ...
+
     @property
     @abstractmethod
     def name(self) -> str:
@@ -106,6 +116,61 @@ class GeminiProvider(BaseLLMProvider):
             text = text[:-3]
 
         return json.loads(text.strip())
+
+
+    def analyze_single_face(
+        self, image_bytes: bytes, palette_hex: Dict[str, str]
+    ) -> Dict[str, Any]:
+        import google.generativeai as genai
+        from PIL import Image
+
+        api_key = settings.gemini_api_key
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY not configured")
+
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-1.5-flash")
+
+        palette_str = json.dumps(palette_hex)
+        prompt = f"""
+        You are an expert Rubik's Cube Vision Agent.
+        Analyze this SINGLE image of a Rubik's Cube face.
+        
+        The user has provided this color palette:
+        {palette_str}
+        
+        Extract the 3x3 grid of colors.
+        For each cell, identify the face label (U, D, F, B, R, L) that corresponds to the color.
+        
+        OUTPUT (valid JSON only):
+        {{
+          "grid": [["U","U","U"], ["R","F","L"], ["D","D","D"]],
+          "stickers": [
+            {{"label": "U", "confidence": 0.99}},
+            {{"label": "U", "confidence": 0.99}}
+          ] // (List all 9 stickers in reading order)
+        }}
+        """
+
+        content = [prompt]
+        img = Image.open(io.BytesIO(image_bytes))
+        content.append(img)
+
+        response = model.generate_content(content)
+        text = response.text.strip()
+
+        # Clean JSON
+        if text.startswith("```json"):
+            text = text[7:]
+        if text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+
+        result = json.loads(text.strip())
+        result["method"] = "llm"
+        result["success"] = True
+        return result
 
 
 class LocalLLMProvider(BaseLLMProvider):

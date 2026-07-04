@@ -7,7 +7,6 @@ import toast from "react-hot-toast";
 import {
   RiUser3Line,
   RiSettings4Line,
-  RiHistoryLine,
   RiGlobalLine,
   RiEditLine,
   RiSaveLine,
@@ -15,7 +14,7 @@ import {
   RiAwardLine,
   RiArrowRightLine,
 } from "react-icons/ri";
-import { getMe, updateProfile, getCubeHistory } from "@/services/api";
+import { getMe, updateProfile } from "@/services/api";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useAuthStore } from "@/store/authStore";
@@ -42,8 +41,6 @@ export default function ProfilePage() {
     bio: "",
   });
   const [loading, setLoading] = useState(false);
-  const [history, setHistory] = useState([]);
-  const [historyLoading, setHistoryLoading] = useState(true);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -58,21 +55,7 @@ export default function ProfilePage() {
         bio: user.bio || "",
       });
     }
-
-    fetchHistory();
   }, [isAuthenticated, user, router]);
-
-  const fetchHistory = async () => {
-    try {
-      setHistoryLoading(true);
-      const res = await getCubeHistory(10, 0);
-      setHistory(res.cubes || []);
-    } catch (err) {
-      console.error("Failed to fetch history:", err);
-    } finally {
-      setHistoryLoading(false);
-    }
-  };
 
   const handleSaveProfile = async () => {
     setLoading(true);
@@ -227,14 +210,7 @@ export default function ProfilePage() {
         >
           Overview
         </button>
-        <button
-          onClick={() => setActiveTab("history")}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === "history" ? "text-amber-400 border-b-2 border-amber-400" : "text-zinc-400 hover:text-white"
-          }`}
-        >
-          Scan History
-        </button>
+
         <button
           onClick={() => setActiveTab("settings")}
           className={`px-4 py-2 text-sm font-medium transition-colors ${
@@ -298,55 +274,7 @@ export default function ProfilePage() {
           </>
         )}
 
-        {activeTab === "history" && (
-          <motion.div className="lg:col-span-3 glass-card p-6" initial="hidden" animate="visible" variants={fadeIn} custom={1}>
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <RiHistoryLine className="w-5 h-5 text-amber-400" /> Recent Scans
-            </h2>
-            
-            {historyLoading ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map(i => <div key={i} className="h-16 skeleton rounded-lg" />)}
-              </div>
-            ) : history.length > 0 ? (
-              <div className="space-y-3">
-                {history.map((item) => (
-                  <div key={item.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-lg bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] transition-colors gap-4">
-                    <div className="flex-1 w-full">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="text-sm font-semibold capitalize">{item.source} Scan</div>
-                        <div className="text-xs text-zinc-400 sm:hidden">
-                          {new Date(item.created_at).toLocaleDateString()}
-                        </div>
-                      </div>
-                      <div className="font-mono text-[10px] text-zinc-400 break-all bg-black/40 p-2 rounded border border-white/5" title={item.cube_string}>
-                        {item.cube_string}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-4">
-                      <div className="text-xs text-zinc-400 hidden sm:block">
-                        {new Date(item.created_at).toLocaleDateString()}
-                      </div>
-                      <Link 
-                        href={`/cube/manual?state=${item.cube_string}`}
-                        className="btn-ghost shrink-0 text-xs py-1.5 px-3 flex items-center gap-1.5"
-                      >
-                        Load in Manual <RiArrowRightLine className="w-3 h-3" />
-                      </Link>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-zinc-500 text-sm">No saved cube states found.</p>
-                <Link href="/cube/scanner" className="btn-secondary text-sm mt-4 inline-block">
-                  Scan a Cube
-                </Link>
-              </div>
-            )}
-          </motion.div>
-        )}
+
 
         {activeTab === "settings" && (
           <motion.div className="lg:col-span-3 glass-card p-6" initial="hidden" animate="visible" variants={fadeIn} custom={1}>

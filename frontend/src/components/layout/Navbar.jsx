@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
 import { useAuthStore } from "@/store/authStore";
+import { useCubeStore } from "@/store/cubeStore";
 import {
   RiDashboardLine,
   RiBox3Line,
@@ -63,10 +64,19 @@ export default function Navbar() {
               const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
               const Icon = item.icon;
 
+              const isCubePage = item.href === "/cube/manual" || item.href === "/cube/scanner";
+              
+              const handleClick = () => {
+                if (isCubePage) {
+                  useCubeStore.getState().resetAll();
+                }
+              };
+
               return (
                 <Link
                   key={item.href}
                   href={item.href}
+                  onClick={handleClick}
                   className={`relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                     isActive
                       ? "text-amber-400"
@@ -147,6 +157,7 @@ export default function Navbar() {
                 if (item.auth && (!isAuthenticated || isRestrictedPage)) return null;
                 const isActive = pathname === item.href;
                 const Icon = item.icon;
+                const isCubePage = item.href === "/cube/manual" || item.href === "/cube/scanner";
 
                 return (
                   <Link
@@ -157,7 +168,10 @@ export default function Navbar() {
                         ? "text-amber-400 bg-amber-400/10"
                         : "text-zinc-400 hover:text-white hover:bg-white/5"
                     }`}
-                    onClick={() => setMobileMenuOpen(false)}
+                    onClick={() => {
+                      if (isCubePage) useCubeStore.getState().resetAll();
+                      setMobileMenuOpen(false);
+                    }}
                   >
                     <Icon className="w-5 h-5" />
                     {item.label}

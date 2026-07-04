@@ -24,8 +24,11 @@ const Cube3D = dynamic(() => import("@/components/cube/Cube3D"), { ssr: false })
 export default function SolutionPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { solution, faces, colorMapping, getPalette, syntheticSolveTime, source, loadKociembaString, setSolution } = useCubeStore();
+  const urlSource = searchParams.get("source");
+  const { solution, faces, colorMapping, getPalette, syntheticSolveTime, source: storeSource, loadKociembaString, setSolution } = useCubeStore();
   const palette = getPalette();
+  
+  const source = urlSource || storeSource || "/cube/manual";
 
   const moves = useMemo(() => {
     if (!solution?.moves) return [];
@@ -161,7 +164,7 @@ export default function SolutionPage() {
             </div>
           </div>
           <button
-            onClick={() => router.push(source || "/cube/manual")}
+            onClick={() => router.push(source)}
             className="btn-ghost flex items-center gap-1.5"
           >
             <RiArrowLeftLine className="w-4 h-4" />

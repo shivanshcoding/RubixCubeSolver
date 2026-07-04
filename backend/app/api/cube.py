@@ -188,27 +188,41 @@ async def scan_cube(
 @router.post("/scan/single")
 async def scan_single_face_endpoint(
     image: UploadFile = File(...),
-    palette: Optional[str] = None,
+    palette: Optional[str] = Body(None),
+    method: Optional[str] = Body("cv"),
 ):
     """Scan a single cube face image and return the detected colours."""
     try:
-        img = await read_image(image)
-
+        img_bytes = await image.read()
+        
         palette_hex = None
         if palette:
             try:
                 palette_hex = json.loads(palette)
             except Exception:
                 pass
-
-        result = scan_single_face(img, palette_hex)
-        return result
-    except Exception:
+                
+        if method == "llm" and is_llm_available():
+            provider = get_llm_provider()
+            return provider.analyze_single_face(img_bytes, palette_hex)
+        else:
+            # Revert bytes to numpy array for CV
+            import numpy as np
+            import cv2
+            img_array = np.frombuffer(img_bytes, np.uint8)
+            img_cv = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+            
+            result = scan_single_face(
+                img_cv, 
+                palette_hex, 
+                return_debug_images=True
+            )
+            return result
+    except Exception as e:
+        print("Error in /scan/single:", e)
         raise HTTPException(
             status_code=422,
-            detail={"error": "Cube face not found. Lighting might be too dark, "
-                    "there is too much glare, or the cube is partially outside "
-                    "the image. Please try again."},
+            detail={"error": "Cube face not found or processing failed. Please try again."},
         )
 
 

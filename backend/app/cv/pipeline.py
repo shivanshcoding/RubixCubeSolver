@@ -48,9 +48,9 @@ class PipelineConfig:
     median_blur_ksize: int = 3       
 
     # ── Dynamic HSV Classification ───────────────────────────────
-    hue_tolerance: int = 25
+    hue_tolerance: int = 25         # 10 OpenCV units = 20 degrees
     saturation_tolerance: int = 130
-    value_tolerance: int = 130
+    value_tolerance: int = 120
     white_min_value: int = 180
     white_max_saturation: int = 90
     white_max_chroma: float = 30.0
@@ -59,10 +59,10 @@ class PipelineConfig:
     morph_kernel_size: int = 3
 
     # ── Palette validation ───────────────────────────────────────
-    de_threshold_poor: float = 22.0
+    de_threshold_poor: float = 15.0
     de_threshold_acceptable: float = 30.0
-    hue_threshold_poor: float = 12.0
-    hue_threshold_acceptable: float = 6.0
+    hue_threshold_poor: float = 18.0
+    hue_threshold_acceptable: float = 10.0
 
     # ── Temporal Smoothing ───────────────────────────────────
 
@@ -252,8 +252,10 @@ def validate_palette(
     w_a, w_b_val = w_lab[1] - 128.0, w_lab[2] - 128.0
     w_s = w_hsv[1]
 
+    white_status = "GOOD"
     if w_s > 35 or abs(w_a) > 15 or abs(w_b_val) > 15:
-        warnings.append("⚠ Selected whitish colour has noticeable colour tint. Detection may confuse white with other colours (e.g. yellow).")
+        white_status = "ACCEPTABLE"
+        warnings.append("⚠ Selected whitish colour has noticeable tint. Detection may confuse white with other colours (e.g. yellow).")
     else:
         warnings.append("✓ Whitish colour calibration is excellent.")
 
@@ -274,18 +276,19 @@ def validate_palette(
             pairs_count += 1
             if de < min_de:
                 min_de = de
-                weakest_lab_pair = f"{f1} ↔ {f2}"
+                weakest_lab_pair = f"{FACE_LABELS[f1]} ({f1}) ↔ {FACE_LABELS[f2]} ({f2})"
 
     avg_de = total_de / pairs_count if pairs_count > 0 else 0.0
 
+    lab_status = "GOOD"
     if min_de < max(config.de_threshold_poor - 10.0 , 13):
-        status = "POOR"
+        lab_status = "POOR"
         warnings.append("❌ Almost identical. CV pipeline will fail.")
     elif min_de < config.de_threshold_poor:
-        status = "POOR"
+        lab_status = "POOR"
         warnings.append(f"⚠ Colours in {weakest_lab_pair} are extremely similar (ΔE={min_de:.1f}).")
     elif min_de < config.de_threshold_acceptable:
-        status = "ACCEPTABLE"
+        lab_status = "ACCEPTABLE"
         warnings.append(f"⚠ Colours in {weakest_lab_pair} are quite similar (ΔE={min_de:.1f}). Some ambiguity possible.")
 
     # 4. Hue Separation & Theoretical Overlap
@@ -310,22 +313,28 @@ def validate_palette(
             
             if hue_dist < min_hue_sep:
                 min_hue_sep = hue_dist
-                weakest_hue_pair = f"{n1} ↔ {n2}"
+                weakest_hue_pair = f"{FACE_LABELS[n1]} ({n1}) ↔ {FACE_LABELS[n2]} ({n2})"
                 
-            # Theoretical Overlap (ideal boundary is ±15° representing max expected shift without clipping)
-            ideal_range_width = 30.0 # ±15°
-            # Two colours overlap if their distance is less than the combined half-widths (15+15 = 36)
+            # Theoretical Overlap (ideal boundary based on hue tolerance)
+            ideal_range_width = 30.0
             overlap = ideal_range_width - hue_dist
             if overlap > 0:
                 if overlap > max_overlap: max_overlap = overlap
-                warnings.append(f"⚠ {n1} and {n2} are only {hue_dist:.1f}° apart. HSV overlap will occurr, classification between them may be unstable.")
+                warnings.append(f"⚠ {FACE_LABELS[n1]} ({n1}) and {FACE_LABELS[n2]} ({n2}) are only {hue_dist:.1f}° apart. HSV overlap will occur, classification between them may be unstable.")
 
-    if min_de >= config.de_threshold_acceptable and max_overlap <= config.hue_threshold_acceptable and len(warnings) <= 2:
-        status = "GOOD"
-    elif min_de >= config.de_threshold_poor and max_overlap <= config.hue_threshold_poor and len(warnings) <= 5:
+    hue_status = "GOOD"
+    if max_overlap > config.hue_threshold_poor:
+        hue_status = "POOR"
+    elif max_overlap > config.hue_threshold_acceptable:
+        hue_status = "ACCEPTABLE"
+
+    statuses = [lab_status, hue_status, white_status]
+    if "POOR" in statuses:
+        status = "POOR"
+    elif "ACCEPTABLE" in statuses:
         status = "ACCEPTABLE"
     else:
-        status = "POOR"
+        status = "GOOD"
 
     return {
         "success": status != "POOR",
@@ -334,6 +343,9 @@ def validate_palette(
         "minimum_distance": float(min_de),
         "average_distance": float(avg_de),
         "distances": {k: float(v) for k, v in distances.items()},
+        "minimum_hue_distance": float(min_hue_sep),
+        "average_hue_distance": float(total_hue_sep / hue_pairs if hue_pairs else 0.0),
+        "maximum_hue_overlap": float(max_overlap),
         "warnings": warnings,
         "weakest_pair": weakest_lab_pair,
     }
@@ -1247,9 +1259,15 @@ def scan_single_face(
     img: np.ndarray,
     palette_hex: Optional[Dict[str, str]] = None,
     config: PipelineConfig = DEFAULT_CONFIG,
+    return_debug_images: bool = False,
 ) -> Dict:
     """Scan a single uploaded face image using the shared pipeline logic."""
-    raw_bgr_patches, raw_hsv_patches, coords = _extract_patches_from_image(img, config)
+    extract_result = _extract_patches_from_image(img, config, return_warped=return_debug_images)
+    if return_debug_images:
+        raw_bgr_patches, raw_hsv_patches, coords, warped_bgr = extract_result
+    else:
+        raw_bgr_patches, raw_hsv_patches, coords = extract_result
+        warped_bgr = None
     bgr_center_patches = [_crop_center(p, config) for p in raw_bgr_patches]
     hsv_center_patches = [_crop_center(p, config) for p in raw_hsv_patches]
 
@@ -1296,12 +1314,69 @@ def scan_single_face(
 
     diagnostics = calculate_diagnostics(img)
 
-    return {
+    result = {
         "stickers": stickers,
         "grid": grid,
         "diagnostics": diagnostics,
         "success": True,
     }
+
+    if return_debug_images and warped_bgr is not None:
+        import base64
+        def _to_b64(cv_img):
+            _, buffer = cv2.imencode('.jpg', cv_img, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            return base64.b64encode(buffer).decode('utf-8')
+
+        # 1. Original resized
+        h, w = img.shape[:2]
+        scale = min(400 / w, 400 / h)
+        if scale < 1:
+            img_resized = cv2.resize(img, (int(w * scale), int(h * scale)))
+        else:
+            img_resized = img.copy()
+
+        # 2. Grid drawn over warped image
+        grid_img = warped_bgr.copy()
+        step = config.warp_size // 3
+        margin = int(step * config.sticker_margin_ratio)
+        for i in range(9):
+            r, c = i // 3, i % 3
+            y1, y2 = r * step + margin, (r + 1) * step - margin
+            x1, x2 = c * step + margin, (c + 1) * step - margin
+            cv2.rectangle(grid_img, (x1, y1), (x2, y2), (255, 255, 255), 2)
+
+        # 3. Classified colours drawn over warped image
+        class_img = grid_img.copy()
+        for i in range(9):
+            r, c = i // 3, i % 3
+            y1, y2 = r * step + margin, (r + 1) * step - margin
+            x1, x2 = c * step + margin, (c + 1) * step - margin
+            label = grid[r][c]
+            
+            # Map label to BGR colour for visualization
+            color_map = {
+                "U": (255, 255, 255), "D": (0, 255, 255),
+                "F": (0, 204, 0), "B": (255, 68, 0),
+                "R": (0, 0, 255), "L": (0, 136, 255)
+            }
+            color_bgr = color_map.get(label, (128, 128, 128))
+            
+            # Draw semi-transparent rectangle
+            overlay = class_img.copy()
+            cv2.rectangle(overlay, (x1, y1), (x2, y2), color_bgr, -1)
+            cv2.addWeighted(overlay, 0.6, class_img, 0.4, 0, class_img)
+            # Add text
+            cv2.putText(class_img, label, (x1 + step//4, y1 + step//2), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 3)
+            cv2.putText(class_img, label, (x1 + step//4, y1 + step//2), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1)
+
+        result["debug_images"] = {
+            "original": f"data:image/jpeg;base64,{_to_b64(img_resized)}",
+            "warped": f"data:image/jpeg;base64,{_to_b64(warped_bgr)}",
+            "grid": f"data:image/jpeg;base64,{_to_b64(grid_img)}",
+            "classified": f"data:image/jpeg;base64,{_to_b64(class_img)}"
+        }
+
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1374,7 +1449,8 @@ def _detect_face_contour(img: np.ndarray) -> Optional[np.ndarray]:
 def _extract_patches_from_image(
     img: np.ndarray,
     config: PipelineConfig = DEFAULT_CONFIG,
-) -> Tuple[List[np.ndarray], List[np.ndarray], List[List[int]]]:
+    return_warped: bool = False,
+) -> Tuple[List[np.ndarray], List[np.ndarray], List[List[int]]] | Tuple[List[np.ndarray], List[np.ndarray], List[List[int]], np.ndarray]:
     """Detect cube face, perspective-warp, extract 9 patches."""
     pts = _detect_face_contour(img)
     h, w = img.shape[:2]
@@ -1412,6 +1488,8 @@ def _extract_patches_from_image(
             hsv_patches.append(warped_hsv[y1:y2, x1:x2])
             coords.append([x1, y1, x2 - x1, y2 - y1])
 
+    if return_warped:
+        return bgr_patches, hsv_patches, coords, warped_bgr
     return bgr_patches, hsv_patches, coords
 
 
@@ -1446,7 +1524,9 @@ async def scan_cube_from_images(
 
     for f in face_order:
         centre_patch = face_patches[f][4]
-        bgr_cleaned, hsv_cleaned, mask, _ = preprocess_patch(centre_patch, config)
+        bgr_cleaned = centre_patch
+        hsv_cleaned = cv2.cvtColor(centre_patch, cv2.COLOR_BGR2HSV)
+        mask = np.ones(hsv_cleaned.shape[:2], dtype=np.uint8) * 255
         rep = representative_color(bgr_cleaned, hsv_cleaned, mask)
         centre_labs[f] = rep["lab"]
 
@@ -1473,7 +1553,9 @@ async def scan_cube_from_images(
                 confs[row][col] = 1.0
                 continue
 
-            bgr_cleaned, hsv_cleaned, mask, _ = preprocess_patch(patch, config)
+            bgr_cleaned = patch
+            hsv_cleaned = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV)
+            mask = np.ones(hsv_cleaned.shape[:2], dtype=np.uint8) * 255
             cls = classify_patch_hsv(
                 bgr_cleaned, hsv_cleaned, mask,
                 hsv_ranges, white_face,
