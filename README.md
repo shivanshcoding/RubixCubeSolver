@@ -16,7 +16,7 @@ Whether you're a beginner learning to solve or a speedcuber competing in contest
 - **🧠 Advanced Solving**: Fast and optimal solution generation using the Kociemba algorithm.
 - **🎮 Interactive 3D Player**: Step-by-step 3D visualization of the solution using `Three.js`.
 - **🏆 Gamification**: Participate in daily contests, climb the leaderboard, and unlock achievements.
-- **🤖 Multimodal AI Vision**: Analyzes uploaded Rubik's Cube images using advanced vision models (Google Gemini 1.5 Flash or Local GPU fallback) to detect colors and extract the grid state accurately, even with tricky lighting.
+- **🤖 Multimodal AI Vision**: Analyzes uploaded Rubik's Cube images using advanced vision models (Google Gemini 3.5 Flash or Local GPU fallback) to detect colors and extract the grid state accurately, even with tricky lighting.
 - **🔐 User Accounts**: Authentication, profiles, and personal solve history.
 
 ## 🛠️ Tech Stack
