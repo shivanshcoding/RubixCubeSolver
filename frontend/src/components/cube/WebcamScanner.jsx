@@ -236,10 +236,6 @@ export default function WebcamScanner({
           return;
         }
 
-        console.log("FULL WS DATA", data);
-        console.log(data.error);
-        console.log(data.trace);
-
         if (data.stickers) {
             console.table(
                 data.stickers.map((s, i) => ({
@@ -247,8 +243,6 @@ export default function WebcamScanner({
                     stable: s.stable,
                     confidence: s.confidence,
                     purity: s.purity,
-                    runner_ratio: s.runner_ratio,
-                    lab_margin: s.lab_margin,
                     label: s.label
                 }))
             );
@@ -350,7 +344,7 @@ const processFrame = () => {
 
   if (hasCameraError) {
     return (
-      <div className="manual-card flex flex-col items-center justify-center p-8 text-center h-full min-h-[400px]">
+      <div className="glass-card flex flex-col items-center justify-center p-8 text-center h-full min-h-[400px]">
         <div className="w-16 h-16 rounded-2xl bg-red-500/20 flex items-center justify-center mb-4">
           <RiCameraLensLine className="w-8 h-8 text-red-400" />
         </div>

@@ -13,7 +13,7 @@ export default function InstructionAccordion({
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <div className="manual-card overflow-hidden">
+    <div className="glass-card overflow-hidden">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between px-5 py-4 group"

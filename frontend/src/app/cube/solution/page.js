@@ -151,7 +151,13 @@ export default function SolutionPage() {
               <span>•</span>
               <span>{syntheticSolveTime != null ? `${syntheticSolveTime} ms` : `${solution.solve_time_ms}ms`} solve time</span>
               <span>•</span>
-              <span className="badge">{solution.difficulty}</span>
+              <span className={`badge ${
+                solution.difficulty === 'hard' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
+                solution.difficulty === 'medium' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' :
+                'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+              }`}>
+                {solution.difficulty ? solution.difficulty.charAt(0).toUpperCase() + solution.difficulty.slice(1) : ''}
+              </span>
             </div>
           </div>
           <button
@@ -245,29 +251,36 @@ export default function SolutionPage() {
               </h3>
 
               <div className="grid grid-cols-5 gap-2.5 overflow-y-auto pr-2 custom-scrollbar relative z-10 pb-4">
-                {moves.map((move, i) => (
-                  <button
-                    key={i}
-                    disabled={uiLocked || isPlaying}
-                    onClick={() => jumpTo(i)}
-                    className={`
-                      relative group overflow-hidden px-2 py-3 rounded-xl text-sm font-mono font-medium transition-all duration-300
-                      ${
-                        i === currentMove
-                          ? "bg-gradient-to-br from-amber-400 to-orange-500 text-black shadow-lg shadow-amber-500/20 scale-105 z-10"
-                          : i < currentMove
-                          ? "bg-white/10 text-white/90 shadow-sm border border-white/5"
-                          : "bg-white/[0.02] text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-300 border border-transparent hover:border-white/10"
-                      } disabled:opacity-50
-                    `}
-                  >
-                    {/* Active state inner glow */}
-                    {i === currentMove && (
-                      <div className="absolute inset-0 bg-white/20 blur-md pointer-events-none" />
-                    )}
-                    <span className="relative z-10">{move.notation}</span>
-                  </button>
-                ))}
+                {moves.length === 0 ? (
+                  <div className="col-span-5 text-center py-8 text-zinc-400">
+                    <h4 className="text-lg font-medium text-amber-500 mb-2">Cube is already solved!</h4>
+                    <p className="text-sm">No moves are required. Great job!</p>
+                  </div>
+                ) : (
+                  moves.map((move, i) => (
+                    <button
+                      key={i}
+                      disabled={uiLocked || isPlaying}
+                      onClick={() => jumpTo(i)}
+                      className={`
+                        relative group overflow-hidden px-2 py-3 rounded-xl text-sm font-mono font-medium transition-all duration-300
+                        ${
+                          i === currentMove
+                            ? "bg-gradient-to-br from-amber-400 to-orange-500 text-black shadow-lg shadow-amber-500/20 scale-105 z-10"
+                            : i < currentMove
+                            ? "bg-white/10 text-white/90 shadow-sm border border-white/5"
+                            : "bg-white/[0.02] text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-300 border border-transparent hover:border-white/10"
+                        } disabled:opacity-50
+                      `}
+                    >
+                      {/* Active state inner glow */}
+                      {i === currentMove && (
+                        <div className="absolute inset-0 bg-white/20 blur-md pointer-events-none" />
+                      )}
+                      <span className="relative z-10">{move.notation}</span>
+                    </button>
+                  ))
+                )}
               </div>
 
               {/* Current Move Explanation */}

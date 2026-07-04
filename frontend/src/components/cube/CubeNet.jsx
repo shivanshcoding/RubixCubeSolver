@@ -17,11 +17,12 @@ const FACE_LABELS = { U: "Up", R: "Right", F: "Front", D: "Down", L: "Left", B: 
  *
  * Each sticker is clickable and updates the cube store.
  */
-export default function CubeNet({ onCenterClick }) {
+export default function CubeNet({ onCenterClick, readOnly = false }) {
   const { faces, colorMapping, activeColor, paintSticker, getStickerCounts } = useCubeStore();
   const counts = getStickerCounts();
 
   function handleClick(face, row, col, isCenter) {
+    if (readOnly) return;
     if (isCenter) {
       if (onCenterClick) onCenterClick(face);
     } else {
@@ -44,13 +45,13 @@ export default function CubeNet({ onCenterClick }) {
                   key={`${face}-${ri}-${ci}`}
                   onClick={() => handleClick(face, ri, ci, isCenter)}
                   className={`cube-sticker ${isCenter ? "center" : ""} ${
-                    cell === activeColor && !isCenter ? "active" : ""
+                    !readOnly && cell === activeColor && !isCenter ? "active" : ""
                   }`}
-                  style={{ backgroundColor: colorMapping[cell] || "#333", cursor: isCenter && onCenterClick ? "pointer" : isCenter ? "default" : "pointer" }}
-                  whileHover={!isCenter || onCenterClick ? { scale: 1.1 } : {}}
-                  whileTap={!isCenter || onCenterClick ? { scale: 0.95 } : {}}
+                  style={{ backgroundColor: colorMapping[cell] || "#333", cursor: readOnly ? "default" : (isCenter && onCenterClick ? "pointer" : isCenter ? "default" : "pointer") }}
+                  whileHover={(!readOnly && (!isCenter || onCenterClick)) ? { scale: 1.1 } : {}}
+                  whileTap={(!readOnly && (!isCenter || onCenterClick)) ? { scale: 0.95 } : {}}
                   aria-label={`Face ${face}, row ${ri}, col ${ci}: ${cell}`}
-                  disabled={isCenter && !onCenterClick}
+                  disabled={readOnly || (isCenter && !onCenterClick)}
                 />
               );
             })

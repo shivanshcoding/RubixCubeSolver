@@ -23,7 +23,7 @@ from typing import Dict, List, Optional, Tuple
 # ═══════════════════════════════════════════════════════════════════
 
 DEBUG_MODE = True
-DEBUG_INTERVAL_SECONDS = 3.0 
+DEBUG_INTERVAL_SECONDS = 5.0 
 
 
 @dataclass
@@ -48,27 +48,27 @@ class PipelineConfig:
     median_blur_ksize: int = 3       
 
     # ── Dynamic HSV Classification ───────────────────────────────
-    hue_tolerance: int = 13
-    saturation_tolerance: int = 120
-    value_tolerance: int = 120
-    white_saturation_offset: int = 40
-    white_value_offset: int = 40
+    hue_tolerance: int = 25
+    saturation_tolerance: int = 130
+    value_tolerance: int = 130
+    white_min_value: int = 180
+    white_max_saturation: int = 90
+    white_max_chroma: float = 30.0
     min_valid_pixels: int = 15
-    min_purity: float = 0.90          # Winner must occupy at least 90% of valid pixels
-    max_runner_ratio: float = 0.08    # Runner-up ≤ 8% of winner
-    min_lab_margin: float = 10.0      # Minimum ΔE difference between winner and runner-up
+    min_purity: float = 0.5        # Winner must occupy at least 50% of valid pixels
     morph_kernel_size: int = 3
 
     # ── Palette validation ───────────────────────────────────────
-    de_threshold_poor: float = 40.0
-    de_threshold_acceptable: float = 50.0
-    hue_threshold_poor: float = 18.0
+    de_threshold_poor: float = 22.0
+    de_threshold_acceptable: float = 30.0
+    hue_threshold_poor: float = 12.0
+    hue_threshold_acceptable: float = 6.0
 
     # ── Temporal Smoothing ───────────────────────────────────
 
     temporal_window: int = 8
-    temporal_majority_weight: float = 0.80
-    required_stable_frames: int = 5
+    temporal_majority_weight: float = 0.6
+    required_stable_frames: int = 6
 
     # ── Upload / perspective warp ────────────────────────────────
     warp_size: int = 300            # warped face is warp_size × warp_size
@@ -167,16 +167,7 @@ def generate_hsv_ranges(palette_hex: Dict[str, str], palette_labs: Dict[str, np.
             upper = np.array([h_max, s_max, v_max], dtype=np.uint8)
             ranges[face] = [(lower, upper)]
             
-    # White uses very low saturation bounds, hue is irrelevant
-    w_h, w_s, w_v = base_hsvs[white_face]
-    w_s_min = 0
-    w_s_max = min(255, w_s + config.white_saturation_offset)
-    w_v_min = max(0, w_v - config.value_tolerance)
-    w_v_max = 255
-    ranges[white_face] = [(
-        np.array([0, w_s_min, w_v_min], dtype=np.uint8),
-        np.array([179, w_s_max, w_v_max], dtype=np.uint8)
-    )]
+    # White is handled separately in classify_patch_hsv using LAB chroma
     
     return ranges, white_face, base_hsvs
 
@@ -287,13 +278,13 @@ def validate_palette(
 
     avg_de = total_de / pairs_count if pairs_count > 0 else 0.0
 
-    if min_de < 15:
+    if min_de < max(config.de_threshold_poor - 10.0 , 13):
         status = "POOR"
         warnings.append("❌ Almost identical. CV pipeline will fail.")
-    elif min_de < 22:
+    elif min_de < config.de_threshold_poor:
         status = "POOR"
         warnings.append(f"⚠ Colours in {weakest_lab_pair} are extremely similar (ΔE={min_de:.1f}).")
-    elif min_de < 30:
+    elif min_de < config.de_threshold_acceptable:
         status = "ACCEPTABLE"
         warnings.append(f"⚠ Colours in {weakest_lab_pair} are quite similar (ΔE={min_de:.1f}). Some ambiguity possible.")
 
@@ -328,10 +319,10 @@ def validate_palette(
             if overlap > 0:
                 if overlap > max_overlap: max_overlap = overlap
                 warnings.append(f"⚠ {n1} and {n2} are only {hue_dist:.1f}° apart. HSV overlap will occurr, classification between them may be unstable.")
-    
-    if min_de >= 30 and max_overlap <= 4 and len(warnings) <= 2:
+
+    if min_de >= config.de_threshold_acceptable and max_overlap <= config.hue_threshold_acceptable and len(warnings) <= 2:
         status = "GOOD"
-    elif min_de >= 20 and max_overlap <= 15 and len(warnings) <= 5:
+    elif min_de >= config.de_threshold_poor and max_overlap <= config.hue_threshold_poor and len(warnings) <= 5:
         status = "ACCEPTABLE"
     else:
         status = "POOR"
@@ -508,6 +499,43 @@ def classify_patch_hsv(
             "classification_failed": True
         }
 
+    # ── White Detection using LAB Neutrality ─────────────────────────────────
+    is_white_candidate = (v >= config.white_min_value) and (s <= config.white_max_saturation)
+    
+    bgr_uint8 = np.array([[[int(rep['bgr'][0]), int(rep['bgr'][1]), int(rep['bgr'][2])]]], dtype=np.uint8)
+    lab_cv = cv2.cvtColor(bgr_uint8, cv2.COLOR_BGR2LAB)[0, 0]
+    
+    # lab_cv is uint8 where L is 0-255, a is 0-255 (neutral 128), b is 0-255 (neutral 128)
+    a_val = lab_cv[1] - 128.0
+    b_val = lab_cv[2] - 128.0
+    chroma = np.sqrt(a_val**2 + b_val**2)
+    
+    if is_debug_frame:
+        print("\nWhite Candidate Check")
+        print("-" * 21)
+        print(f"Candidate : {'YES' if is_white_candidate else 'NO'} (V={v}, S={s})")
+        if is_white_candidate:
+            print(f"Representative LAB : ({lab_cv[0]}, {lab_cv[1]}, {lab_cv[2]})")
+            print(f"a : {a_val:.1f}")
+            print(f"b : {b_val:.1f}")
+            print(f"Chroma : {chroma:.1f} (Max: {config.white_max_chroma})")
+            if chroma <= config.white_max_chroma:
+                print("Accepted as WHITE")
+            else:
+                print(f"Rejected: Chroma too high ({chroma:.1f})")
+
+    if is_white_candidate and chroma <= config.white_max_chroma:
+        # Patch is classified as white
+        return {
+            "face": white_face,
+            "runner_up": "unknown",
+            "confidence": 1.0,
+            "purity": 1.0,
+            "pixel_counts": {white_face: rep.get("valid_pixels", 1)},
+            "reason": "Accepted as WHITE",
+            "valid": True,
+        }
+
     patch_dir = os.path.join(debug_dir, f"patch_{patch_idx}") if is_debug_frame else ""
     if is_debug_frame and patch_dir:
         os.makedirs(patch_dir, exist_ok=True)
@@ -570,26 +598,6 @@ def classify_patch_hsv(
         face_mask = cv2.bitwise_and(face_mask, glare_mask)
         pixels_after_glare = int(np.sum(face_mask > 0))
         
-        white_rejected = False
-        white_reason = ""
-        white_a = 0.0
-        white_b = 0.0
-        
-        # Secondary check for white (a and b should be near 0 in LAB space)
-        if face == white_face:
-            white_pixels = bgr_patch[face_mask > 0]
-            if len(white_pixels) > 0:
-                bgr_mean = np.mean(white_pixels, axis=0)
-                bgr_uint8 = np.array([[[int(bgr_mean[0]), int(bgr_mean[1]), int(bgr_mean[2])]]], dtype=np.uint8)
-                lab_cv = cv2.cvtColor(bgr_uint8, cv2.COLOR_BGR2LAB)[0, 0]
-                white_a = lab_cv[1] - 128.0
-                white_b = lab_cv[2] - 128.0
-                if abs(white_a) > 20 or abs(white_b) > 20:
-                    face_mask[:] = 0 # Not neutral enough to be white
-                    white_rejected = True
-                    white_reason = "Not neutral enough."
-                    pixels_after_glare = 0
-
         count = int(np.sum(face_mask > 0))
         pixel_counts[face] = count
         face_masks[face] = face_mask
@@ -601,16 +609,6 @@ def classify_patch_hsv(
             print(f"Pixels after Morph CLOSE : {pixels_after_close}")
             print(f"Pixels after Validity Mask : {pixels_after_glare}")
             print(f"Final Pixel Count : {count}")
-            
-            if face == white_face:
-                print("\nWhite Neutral Check")
-                print(f"a = {white_a:.1f}")
-                print(f"b = {white_b:.1f}")
-                if white_rejected:
-                    print("White rejected")
-                    print(f"Reason: {white_reason}")
-                else:
-                    print("PASS")
                     
             # Save individual mask
             mask_bgr = cv2.cvtColor(face_mask, cv2.COLOR_GRAY2BGR)
@@ -716,6 +714,7 @@ def classify_patch_hsv(
     else:
         runner_up = "unknown"
         orig_winner = winner
+        purity = 0.9
         orig_runner = runner_up
         
     if is_debug_frame:
@@ -736,7 +735,11 @@ def classify_patch_hsv(
             print(f"{best_face} : {d_min:.1f}")
             print(f"{best_runner} : {d_runner:.1f}")
             
-            if abs(d_min - d_runner) < 3.0:
+            if (
+                d_min <= LAB_CONFIDENT_DISTANCE
+                and
+                abs(d_min - d_runner) <= LAB_TIE_THRESHOLD
+            ):
                 print(f"\nHue Distance")
                 print(f"{best_face} : {d_hue_w:.1f} (OpenCV scale)")
                 print(f"{best_runner} : {d_hue_r:.1f} (OpenCV scale)")

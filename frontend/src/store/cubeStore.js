@@ -220,8 +220,16 @@ export const useCubeStore = create((set, get) => ({
   },
 
   isCountsValid: () => {
-    const counts = get().getStickerCounts();
-    return FACE_ORDER.every((f) => counts[f] === 9);
+    const { faces } = get();
+    for (const face of FACE_ORDER) {
+      if (!faces[face]) return false;
+      for (const row of faces[face]) {
+        for (const cell of row) {
+          if (cell === "unknown") return false;
+        }
+      }
+    }
+    return true;
   },
 
   // ─── Validation ────────────────────────────────────

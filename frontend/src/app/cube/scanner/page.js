@@ -11,6 +11,7 @@ import {
   RiCheckLine,
   RiArrowRightLine,
   RiEditLine,
+  RiQuestionLine,
   RiUploadCloud2Line,
   RiPaletteLine,
   RiInformationLine,
@@ -20,6 +21,7 @@ import { useCubeStore } from "@/store/cubeStore";
 import { useUIStore } from "@/store/uiStore";
 import { solveCube, validateCubeString } from "@/services/api";
 
+import CubeUnfold3D from "@/components/cube/CubeUnfold3D";
 import ColorConfiguration from "@/components/cube/ColorConfiguration";
 import WebcamScanner from "@/components/cube/WebcamScanner";
 import FaceReviewPanel from "@/components/cube/FaceReviewPanel";
@@ -46,6 +48,102 @@ const DIAGNOSTICS = [
   { key: "angle", label: "Angle" },
   { key: "glare", label: "Glare" }
 ];
+
+// ─── 3D → 2D INSTRUCTIONS ──────────────────────────────────────
+function CubeUnfoldInstructions() {
+  const FACE_COLORS = {
+    U: { bg: "#FFFFFF", text: "#000" },
+    D: { bg: "#FFFF00", text: "#000" },
+    F: { bg: "#00CC00", text: "#fff" },
+    B: { bg: "#0044FF", text: "#fff" },
+    R: { bg: "#FF0000", text: "#fff" },
+    L: { bg: "#FF8800", text: "#fff" },
+  };
+
+  return (
+    <InstructionAccordion 
+      title="How to enter your cube" 
+      subtitle="See how the 3D cube maps to the 2D net"
+      icon={RiQuestionLine}
+    >
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center mb-6">
+        
+        {/* Left Column: Text Instructions */}
+        <div className="space-y-6">
+          {/* Step 1: Hold the cube */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-5 h-5 rounded-full bg-amber-400/20 text-amber-400 text-[10px] font-bold flex items-center justify-center shadow-[0_0_10px_rgba(251,191,36,0.2)]">1</span>
+              <span className="text-sm font-medium text-zinc-200">Hold the cube facing you</span>
+            </div>
+            <p className="text-xs text-zinc-400 ml-7 leading-relaxed">
+              Pick any face as the Front. The face directly looking at you is <strong className="text-green-400">Front (F)</strong>.
+              The face on top is <strong className="text-white">Up (U)</strong>.
+            </p>
+          </div>
+
+          {/* Step 2: The cube unfolds into a cross */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-5 h-5 rounded-full bg-amber-400/20 text-amber-400 text-[10px] font-bold flex items-center justify-center shadow-[0_0_10px_rgba(251,191,36,0.2)]">2</span>
+              <span className="text-sm font-medium text-zinc-200">The cube unfolds into a cross</span>
+            </div>
+            <p className="text-xs text-zinc-400 ml-7 leading-relaxed">
+              Imagine unfolding the cube flat. The <strong className="text-white">Up</strong> face goes on top,
+              the <strong className="text-green-400">Front</strong> face stays center,
+              and the rest wrap around it.
+            </p>
+          </div>
+
+          {/* Step 3: Fill in stickers */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-5 h-5 rounded-full bg-amber-400/20 text-amber-400 text-[10px] font-bold flex items-center justify-center shadow-[0_0_10px_rgba(251,191,36,0.2)]">3</span>
+              <span className="text-sm font-medium text-zinc-200">Paint the stickers</span>
+            </div>
+            <div className="ml-7 space-y-2 text-xs text-zinc-400 leading-relaxed">
+              <p>Select a color from the palette, then click each sticker on the 2D net.</p>
+              <p>The <strong className="text-zinc-200">center stickers are fixed</strong> — they define the face identity.</p>
+              <p>Fill in all 54 stickers to match your physical cube.</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Animated 3D to 2D Net Visualization */}
+        <div className="relative">
+          {/* Subtle glowing background behind the glass */}
+          <div className="absolute inset-0 bg-gradient-to-tr from-amber-500/10 via-transparent to-blue-500/10 rounded-2xl blur-2xl" />
+          
+          {/* Glassmorphic container */}
+          <div className="relative bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl">
+            <CubeUnfold3D height="330px" />
+            <div className="mt-4 flex items-center justify-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)] animate-pulse" />
+              <p className="text-center text-[10px] text-zinc-400 uppercase tracking-widest font-medium">
+                Interactive Preview
+              </p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Face Reference Table */}
+      <div className="bg-black/20 backdrop-blur-sm rounded-xl p-4 border border-white/5">
+        <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3 font-semibold">Quick Reference</div>
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+          {Object.entries(FACE_LABELS).map(([key, label]) => (
+            <div key={key} className="flex items-center gap-2">
+              <div className="w-3.5 h-3.5 rounded-sm shadow-[0_2px_4px_rgba(0,0,0,0.4)]" style={{ backgroundColor: FACE_COLORS[key].bg }} />
+              <span className="text-xs text-zinc-400 font-medium"><strong className="text-zinc-200">{key}</strong></span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </InstructionAccordion>
+  );
+}
+
 
 export default function ScannerPage() {
   const router = useRouter();
@@ -78,18 +176,18 @@ export default function ScannerPage() {
 
   useEffect(() => {
     setIsMounted(true);
-    if (solution) {
-      reset();
-      setMode("CALIBRATING");
-    } else if (isColorMappingSet) {
+    const state = useCubeStore.getState();
+    if (state.isCountsValid()) {
+      setMode("COMPLETED");
+    } else if (state.isColorMappingSet) {
       setMode("SCANNING");
     }
-  }, [isColorMappingSet, solution, reset]);
+  }, []);
 
   // Handle particle background visibility
   const setShowParticles = useUIStore((state) => state.setShowParticles);
   useEffect(() => {
-    if (mode === "SCANNING" || mode === "REVIEW" || mode === "UPLOAD") {
+    if (mode === "SCANNING" || mode === "REVIEW" || mode === "UPLOAD" || mode === "MISMATCH_PROMPT") {
       setShowParticles(false);
     } else {
       setShowParticles(true);
@@ -131,13 +229,50 @@ export default function ScannerPage() {
       setSticker(currentFace, row, col, faceVal);
     });
 
-    const currIdx = FACE_ORDER.indexOf(currentFace);
-    if (currIdx < 5) {
-      setActiveScanFace(FACE_ORDER[currIdx + 1]);
+    // Check if we are done with all faces
+    let hasUnknown = false;
+    for (const face of FACE_ORDER) {
+      if (face === currentFace) {
+        // Check the stickers we just accepted
+        stickers.forEach(s => {
+           const faceVal = typeof s === "object" ? (s.label || s.color) : s;
+           if (faceVal === "unknown") hasUnknown = true;
+        });
+      } else {
+        // Check the store for other faces
+        if (faces[face]) {
+          for (const row of faces[face]) {
+            for (const cell of row) {
+              if (cell === "unknown") hasUnknown = true;
+            }
+          }
+        }
+      }
+    }
+
+    if (!hasUnknown) {
       setMode("SCANNING");
     } else {
-      setMode("COMPLETED");
-      validateFinalCube();
+      const currIdx = FACE_ORDER.indexOf(currentFace);
+      // Find the next face that has 'unknown'
+      let nextIdx = (currIdx + 1) % 6;
+      for (let i = 0; i < 6; i++) {
+        const checkFace = FACE_ORDER[nextIdx];
+        let faceHasUnknown = false;
+        if (faces[checkFace]) {
+           for (const row of faces[checkFace]) {
+              for (const cell of row) {
+                 if (cell === "unknown") faceHasUnknown = true;
+              }
+           }
+        }
+        if (faceHasUnknown) {
+           break;
+        }
+        nextIdx = (nextIdx + 1) % 6;
+      }
+      setActiveScanFace(FACE_ORDER[nextIdx]);
+      setMode("SCANNING");
     }
   };
 
@@ -241,7 +376,7 @@ export default function ScannerPage() {
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
             <RiCameraLine className="w-5 h-5 text-white" />
           </div>
-          <div>
+          <div className="flex-1">
             <h1 className="text-2xl sm:text-3xl font-bold" style={{ fontFamily: "var(--font-display)" }}>
               Camera Scanner
             </h1>
@@ -249,6 +384,21 @@ export default function ScannerPage() {
               Configure colors, scan faces, then solve.
             </p>
           </div>
+          {mode !== "CALIBRATING" && (
+            <button 
+              onClick={() => {
+              if (window.confirm("Are you sure you want to clear the current cube and start fresh?")) {
+                useCubeStore.getState().resetAll();
+                setMode("CALIBRATING");
+              }
+            }} 
+            className="btn-secondary text-xs flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20"
+            title="Start Fresh"
+          >
+            <RiRefreshLine className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Reset</span>
+          </button>
+          )}
         </div>
 
         {/* Step Indicator */}
@@ -267,13 +417,28 @@ export default function ScannerPage() {
                   if (s.num === 1) setMode("CALIBRATING");
                   else if (isColorMappingSet && mode === "CALIBRATING") setMode("SCANNING");
                 }}
-                className={`manual-step-btn ${isActive ? "active" : ""}`}
+                disabled={!isCompleted && !isActive}
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium transition-all duration-300 ${
+                  isActive
+                    ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.1)]"
+                    : isCompleted
+                    ? "bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white border border-transparent cursor-pointer"
+                    : "bg-transparent text-zinc-600 cursor-not-allowed border border-transparent"
+                }`}
               >
-                <span className={`manual-step-num ${isActive ? "active" : ""}`}>
-                  {isCompleted ? <RiCheckLine className="w-3.5 h-3.5" /> : s.num}
+                <span
+                  className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[10px] sm:text-xs font-bold transition-colors ${
+                    isActive
+                      ? "bg-amber-500 text-white"
+                      : isCompleted
+                      ? "bg-zinc-700 text-zinc-300"
+                      : "bg-zinc-800 text-zinc-600"
+                  }`}
+                >
+                  {isCompleted ? <RiCheckLine className="w-3 h-3" /> : s.num}
                 </span>
-                <s.icon className="w-4 h-4 hidden sm:block" />
-                {s.label}
+                <span className="hidden sm:inline">{s.label}</span>
+                <span className="sm:hidden">{s.label.split(' ')[0]}</span>
               </button>
             );
           })}
@@ -300,7 +465,7 @@ export default function ScannerPage() {
         )}
 
         {/* ─── Mode: Scanning ─── */}
-        {(mode === "SCANNING" || mode === "REVIEW" || mode === "UPLOAD") && (
+        {(mode === "SCANNING" || mode === "REVIEW" || mode === "UPLOAD" || mode === "MISMATCH_PROMPT") && (
           <motion.div
             key="scan_workflow"
             initial={{ opacity: 0, x: 20 }}
@@ -327,15 +492,16 @@ export default function ScannerPage() {
                  ))}
                </div>
                
-               {isCountsValid() && mode !== "COMPLETED" && (
+               {(
                  <button 
+                   disabled = {!isCountsValid()}
                    onClick={() => {
                      setMode("COMPLETED");
                      validateFinalCube();
                    }} 
-                   className="btn-primary text-sm py-2 px-4 shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+                   className="btn-primary text-sm py-2 px-4 shadow-[0_0_15px_rgba(59,130,246,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
                  >
-                   Proceed to Solve
+                  Validate Cube
                  </button>
                )}
             </div>
@@ -394,7 +560,16 @@ export default function ScannerPage() {
                           This is the {FACE_LABELS[typeof reviewStickers[4] === "object" ? (reviewStickers[4].label || reviewStickers[4].color) : reviewStickers[4]]} face
                         </button>
                         <button 
-                          onClick={() => setMode("REVIEW")} 
+                          onClick={() => {
+                            const newStickers = [...reviewStickers];
+                            newStickers[4] = {
+                                ...newStickers[4],
+                                label: activeScanFace,
+                                color: colorMapping[activeScanFace] || activeScanFace
+                            };
+                            setReviewStickers(newStickers);
+                            setMode("REVIEW");
+                          }} 
                           className="btn-secondary py-3 border-white/20 text-white"
                         >
                           Continue as {FACE_LABELS[activeScanFace]} face
@@ -422,7 +597,7 @@ export default function ScannerPage() {
 
               {/* Col 2: Editable 2D Live Map */}
               <div className="h-full">
-                <div className="manual-card h-full flex flex-col !p-4">
+                <div className="glass-card h-full flex flex-col !p-4">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
                      <div className="text-sm font-semibold text-zinc-200">2D Live Map</div>
                      
@@ -479,7 +654,7 @@ export default function ScannerPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
                  
                  {/* Auto Calibration */}
-                 <div className="manual-card">
+                 <div className="glass-card p-6">
                    <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2 mb-6">
                      <RiCameraLine className="w-4 h-4 text-zinc-400" />
                      Calibration
@@ -529,7 +704,7 @@ export default function ScannerPage() {
                  </div>
 
                  {/* Diagnostics */}
-                 <div className="manual-card">
+                 <div className="glass-card p-6">
                    <div className="flex items-center justify-between mb-4">
                      <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
                        <RiCheckLine className="w-4 h-4 text-zinc-400" />
@@ -561,6 +736,8 @@ export default function ScannerPage() {
               </div>
             )}
             
+            {/* Instructions Toggle */}
+              <CubeUnfoldInstructions />
           </motion.div>
         )}
 
@@ -574,20 +751,20 @@ export default function ScannerPage() {
             {/* Split layout 60/40 */}
             <div className="grid grid-cols-1 lg:grid-cols-[60%_1fr] gap-6 mb-8">
               {/* 2D Map (60%) */}
-              <div className="manual-card h-full flex flex-col">
+              <div className="glass-card p-6 h-full flex flex-col">
                  <div className="text-sm font-semibold text-zinc-200 mb-4 flex items-center gap-2">
                    <RiCheckLine className="text-zinc-400" />
                    Final 2D Preview
                  </div>
                  <div className="flex-1 flex items-center justify-center p-4">
                     <div className="w-full max-w-[420px] mx-auto">
-                      <CubeNet />
+                      <CubeNet readOnly={true} />
                     </div>
                  </div>
               </div>
 
               {/* 3D Map (40%) */}
-              <div className="manual-card h-full flex flex-col">
+              <div className="glass-card p-6 h-full flex flex-col">
                  <div className="text-sm font-semibold text-zinc-200 mb-4 flex items-center gap-2">
                    <RiCameraLine className="text-zinc-400" />
                    Final 3D Preview

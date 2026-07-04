@@ -39,7 +39,7 @@ export default function FaceReviewPanel({ face, stickers, onAccept, onRescan, on
   };
 
   return (
-    <div className="manual-card flex flex-col items-center max-w-md mx-auto w-full">
+    <div className="glass-card p-6 flex flex-col items-center max-w-md mx-auto w-full">
       <div className="text-sm font-semibold text-zinc-200 mb-1">{face} Face Captured</div>
       <div className="text-xs text-zinc-500 mb-6">Review the detected colors. Tap any sticker to correct it.</div>
 

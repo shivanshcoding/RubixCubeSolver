@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { RiPaletteLine, RiArrowRightLine, RiLoader4Line, RiCheckLine, RiErrorWarningLine, RiCloseLine, RiLightbulbFlashLine } from "react-icons/ri";
+import { 
+  RiPaletteLine, RiArrowRightLine, RiLoader4Line, 
+  RiCheckLine, RiErrorWarningLine, RiCloseLine, RiRefreshLine
+} from "react-icons/ri";
 import { validatePalette } from "@/services/api";
 
 const FACE_ORDER = ["U", "R", "F", "D", "L", "B"];
@@ -47,164 +50,159 @@ export default function ColorConfiguration({ tempColors, setTempColors, onConfir
   };
 
   return (
-    <div className="manual-card relative overflow-hidden">
-      <div className="flex items-center justify-between mb-2 relative z-10">
-        <div className="flex items-center gap-2">
-          <RiPaletteLine className="w-5 h-5 text-amber-400" />
-          <h2 className="text-lg font-semibold">Select Your Cube Colors</h2>
-        </div>
-        <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-white/5 border border-white/10">
-          <div className={`w-2 h-2 rounded-full ${
-            similarityStatus === "ready" ? "bg-zinc-500 shadow-none" :
-            similarityStatus === "good" ? "bg-green-500 shadow-[0_0_8px_#22c55e]" : 
-            similarityStatus === "acceptable" ? "bg-yellow-500 shadow-[0_0_8px_#eab308]" : 
-            "bg-red-500 shadow-[0_0_8px_#ef4444]"
-          }`} />
-          <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">
-            {similarityStatus === "ready" ? "Pending Check" : 
-             similarityStatus === "good" ? "Colors Good" : 
-             similarityStatus === "acceptable" ? "Acceptable" : "Too Similar"}
-          </span>
+    <div className="glass-card p-3 lg:p-8 relative overflow-hidden flex flex-col gap-8">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-1.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
+              <RiPaletteLine className="w-4 h-4 text-amber-400" />
+            </div>
+            <h2 className="text-xl font-bold text-white">Center Colors</h2>
+          </div>
+          <p className="text-sm text-zinc-400">
+            Select the exact color of each face's center sticker. Center pieces never move and dictate the face color.
+          </p>
         </div>
       </div>
-      
-      {!valResult && (
-        <p className="text-sm text-zinc-500 mb-6 relative z-10">
-          Every Rubik&apos;s Cube has unique center colors. Centers never move.
-          Select the physical color of each face&apos;s center sticker.
-        </p>
-      )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 relative z-10 mb-6">
+      {/* Color Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {FACE_ORDER.map((face, i) => (
           <motion.div
             key={face}
-            className="manual-color-picker"
+            className="flex items-center gap-4 p-3 rounded-2xl bg-black/20 border border-white/5 hover:bg-white/5 hover:border-white/10 transition-all group"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.06 }}
+            transition={{ delay: i * 0.05 }}
           >
-            <input
-              type="color"
-              value={tempColors[face]}
-              onChange={(e) => handleColorChange(face, e.target.value)}
-              className="manual-color-input"
-            />
-            <div>
-              <div className="text-sm font-medium text-zinc-200">
-                {FACE_LABELS[face]} ({face})
+            <div className="relative w-12 h-12 rounded-xl overflow-hidden shrink-0 shadow-lg border border-white/10 group-hover:scale-105 transition-transform duration-300">
+              <input
+                type="color"
+                value={tempColors[face]}
+                onChange={(e) => handleColorChange(face, e.target.value)}
+                className="absolute inset-[-10px] w-[200%] h-[200%] cursor-pointer opacity-0 z-10"
+              />
+              <div 
+                className="absolute inset-0 pointer-events-none" 
+                style={{ backgroundColor: tempColors[face] }}
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold text-zinc-200 group-hover:text-white transition-colors truncate">
+                {FACE_LABELS[face]}
               </div>
-              <div className="text-xs text-zinc-600 font-mono">{tempColors[face]}</div>
+              <div className="text-xs text-zinc-500 font-mono mt-0.5 truncate uppercase">
+                {tempColors[face]}
+              </div>
             </div>
           </motion.div>
         ))}
       </div>
 
-      <AnimatePresence mode="wait">
-        {!valResult ? (
-          <motion.button
-            key="validate-btn"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            onClick={handleConfirm}
-            disabled={isValidating}
-            className="btn-primary flex items-center gap-2 relative z-10 w-full justify-center disabled:opacity-75"
-            whileHover={isValidating ? {} : { scale: 1.02 }}
-            whileTap={isValidating ? {} : { scale: 0.98 }}
-          >
-            {isValidating ? (
-              <>
-                <RiLoader4Line className="w-4 h-4 animate-spin" />
-                Validating Palette...
-              </>
-            ) : (
-              <>
-                Analyze Palette
-                <RiArrowRightLine className="w-4 h-4" />
-              </>
-            )}
-          </motion.button>
-        ) : (
-          <motion.div
-            key="validation-card"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="relative z-10 flex flex-col gap-4 p-4 rounded-xl border bg-black/40 backdrop-blur-md overflow-hidden"
-            style={{
-              borderColor: valResult.status === "GOOD" ? "rgba(34, 197, 94, 0.3)" : 
-                           valResult.status === "ACCEPTABLE" ? "rgba(234, 179, 8, 0.3)" : 
-                           "rgba(239, 68, 68, 0.3)"
-            }}
-          >
-            {/* Header */}
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  Palette Analysis
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider
-                    ${valResult.status === "GOOD" ? "bg-green-500/20 text-green-400" : 
-                      valResult.status === "ACCEPTABLE" ? "bg-yellow-500/20 text-yellow-400" : 
-                      "bg-red-500/20 text-red-400"}`}
-                  >
-                    {valResult.status === "GOOD" ? "Excellent" : valResult.status === "ACCEPTABLE" ? "Acceptable" : "Poor"}
-                  </span>
-                </h3>
-                <div className="text-xs text-zinc-400 mt-1">Status: <strong className="text-zinc-200">{valResult.status}</strong></div>
-              </div>
-            </div>
-
-
-
-            {/* Warnings */}
-            {valResult.warnings && valResult.warnings.length > 0 && (
-              <div className="space-y-1.5">
-                <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Warnings</div>
-                {valResult.warnings.map((w, i) => {
-                  const isGood = w.includes("✓") || w.includes("excellent") || w.includes("Good");
-                  const cleanW = w.replace(/^[^a-zA-Z]+/, "").trim();
-                  return (
-                    <div key={i} className={`flex gap-2 text-xs leading-tight ${isGood ? "text-green-300" : "text-orange-300"}`}>
-                      <span className="shrink-0">{isGood ? "✓" : "⚠"}</span>
-                      <span>{cleanW}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Recommendations */}
-            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mt-1">
-               <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-blue-400 font-bold mb-1.5">
-                 <RiLightbulbFlashLine /> Recommendations
-               </div>
-               <ul className="text-xs text-blue-200/80 space-y-1 pl-1">
-                 <li className="flex gap-1.5"><RiCheckLine className="w-3.5 h-3.5 text-blue-400" /> Use brighter, neutral lighting</li>
-                 <li className="flex gap-1.5"><RiCheckLine className="w-3.5 h-3.5 text-blue-400" /> Keep cube close to camera</li>
-                 <li className="flex gap-1.5"><RiCheckLine className="w-3.5 h-3.5 text-blue-400" /> Avoid harsh reflections</li>
-               </ul>
-            </div>
-
-            {/* Actions */}
-            <div className="flex gap-2 mt-2">
-              <button 
-                onClick={() => setValResult(null)}
-                className="flex-1 py-2 rounded-md border border-white/10 text-xs font-bold text-zinc-300 hover:bg-white/5 transition-colors"
-              >
-                Tweak Colors
-              </button>
-              {valResult.success && (
-                <button 
-                  onClick={onConfirm}
-                  className="flex-1 py-2 rounded-md bg-white/10 border border-white/20 text-xs font-bold text-white hover:bg-white/20 transition-colors shadow-lg"
-                >
-                  Confirm & Scan
-                </button>
+      {/* Analysis & Actions */}
+      <div className="pt-2 border-t border-white/5">
+        <AnimatePresence mode="wait">
+          {!valResult ? (
+            <motion.button
+              key="validate-btn"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              onClick={handleConfirm}
+              disabled={isValidating}
+              className="btn-primary w-full sm:w-auto px-8 py-3 flex items-center justify-center gap-2 mx-auto disabled:opacity-75"
+              whileHover={isValidating ? {} : { scale: 1.02, boxShadow: "0 0 20px rgba(59,130,246,0.3)" }}
+              whileTap={isValidating ? {} : { scale: 0.98 }}
+            >
+              {isValidating ? (
+                <>
+                  <RiLoader4Line className="w-5 h-5 animate-spin" />
+                  Analyzing Palette...
+                </>
+              ) : (
+                <>
+                  Analyze Colors
+                  <RiArrowRightLine className="w-5 h-5" />
+                </>
               )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </motion.button>
+          ) : (
+            <motion.div
+              key="analysis-result"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`flex flex-col gap-5 p-5 rounded-2xl border bg-black/40 backdrop-blur-md overflow-hidden ${
+                valResult.status === "GOOD" ? "border-green-500/30" : 
+                valResult.status === "ACCEPTABLE" ? "border-yellow-500/30" : 
+                "border-red-500/30"
+              }`}
+            >
+              {/* Header Status */}
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                  valResult.status === "GOOD" ? "bg-green-500/20 text-green-400" : 
+                  valResult.status === "ACCEPTABLE" ? "bg-yellow-500/20 text-yellow-400" : 
+                  "bg-red-500/20 text-red-400"
+                }`}>
+                  {valResult.status === "GOOD" ? <RiCheckLine className="w-5 h-5" /> : <RiErrorWarningLine className="w-5 h-5" />}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">
+                    {valResult.status === "GOOD" ? "Excellent Palette!" : 
+                     valResult.status === "ACCEPTABLE" ? "Acceptable Palette" : 
+                     "Poor Palette Contrast"}
+                  </h3>
+                  <p className="text-sm text-zinc-400 mt-0.5">
+                    {valResult.status === "GOOD" ? "Colors are easily distinguishable." : 
+                     valResult.status === "ACCEPTABLE" ? "Some colors are similar, but usable." : 
+                     "Colors are too similar for reliable detection."}
+                  </p>
+                </div>
+              </div>
+
+              {/* Simplified Warnings */}
+              {valResult.status !== "GOOD" && valResult.warnings && valResult.warnings.length > 0 && (
+                <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                  <div className="text-xs uppercase tracking-wider text-zinc-500 font-bold mb-3">Suggestions</div>
+                  <div className="space-y-2">
+                    {valResult.warnings.map((w, i) => {
+                      const isGood = w.includes("✓") || w.includes("excellent") || w.includes("Good");
+                      const cleanW = w.replace(/^[^a-zA-Z]+/, "").trim();
+                      if (isGood) return null; // Only show issues
+                      return (
+                        <div key={i} className="flex gap-2 text-sm text-zinc-300">
+                          <RiErrorWarningLine className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
+                          <span>{cleanW}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <button 
+                  onClick={() => setValResult(null)}
+                  className="btn-ghost flex-1 flex justify-center items-center gap-2 py-2.5"
+                >
+                  <RiRefreshLine className="w-4 h-4" />
+                  Adjust Colors
+                </button>
+                {valResult.success && (
+                  <button 
+                    onClick={onConfirm}
+                    className="btn-primary flex-1 py-2.5 shadow-[0_0_15px_rgba(59,130,246,0.2)]"
+                  >
+                    Confirm & Continue
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
